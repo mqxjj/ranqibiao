@@ -1,0 +1,6 @@
+services:
+  - type: static
+    name: gas-supervision-demo
+    plan: free
+    buildCommand: ""
+    publishDirectory: cockpit
