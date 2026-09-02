@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>燃气运行监测 - 某某智慧燃气监管</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* 仅页面专属布局微调 */
+.mn-body{display:grid;grid-template-columns:1fr 420px;gap:14px}
+.mn-foot{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+select.sel{padding:5px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:var(--sans);outline:none;cursor:pointer}
+select.sel option{background:var(--bg2)}
+select.sel:focus{border-color:var(--accent)}
+input.inp,textarea.inp{width:100%;padding:6px 8px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:var(--sans);outline:none}
+input.inp:focus,textarea.inp:focus{border-color:var(--accent)}
+.btn.sm{padding:2px 8px;font-size:11px}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 8px var(--success);animation:bk 1.2s infinite}
+</style>
+</head>
+<body data-page="monitor">
+<div class="bg-atmos"></div>
+<header class="topbar">
+<span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span>
+<div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div>
+<div class="crumb">监管应用 / <b>燃气运行监测</b></div>
+<div class="sp"></div>
+<div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div>
+</header>
+<aside class="sidenav" id="nav"></aside>
+<main class="main">
+  <!-- ====== 顶部 KPI ====== -->
+  <div class="grid g-4" id="mnKpi"></div>
+  <!-- ====== 主体：设备表 + 右栏 ====== -->
+  <div class="mn-body mt12">
+    <div class="panel flex-1" data-r="80">
+      <div class="panel-h"><span class="t">设备实时监测</span><span class="more">共 <b class="t-accent mono" id="devCount">12</b> 台</span></div>
+      <div class="panel-b">
+        <div class="toolbar">
+          <select class="sel" id="distFilter" onchange="renderDevices(this.value)">
+            <option value="全部">全部区县</option>
+          </select>
+          <select class="sel" id="typeFilter" onchange="renderType(this.value)">
+            <option value="全部">全部类型</option>
+          </select>
+          <div class="sp"></div>
+          <span class="fz12 t-sub"><span class="live-dot"></span> 实时刷新</span>
+        </div>
+        <table class="tbl">
+          <thead><tr><th>设备ID</th><th>类型</th><th>位置</th><th>最近值</th><th>电池</th><th>状态</th></tr></thead>
+          <tbody id="devTbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="fcol gap12" style="min-width:0">
+      <div class="panel" data-r="140">
+        <div class="panel-h"><span class="t">在线率与类型分布</span></div>
+        <div class="panel-b">
+          <div class="fz12 t-sub">各区设备在线率</div>
+          <canvas id="onlineBar" style="width:100%;height:88px"></canvas>
+          <div class="fz12 t-sub mt12">设备类型分布</div>
+          <div class="flex gap12 aic mt8">
+            <div class="donut" style="width:100px;height:100px;flex:0 0 100px">
+              <canvas id="typeDonut" style="width:100px;height:100px"></canvas>
+              <div class="cap"><div class="v" style="font-size:16px">12</div><div class="l">台</div></div>
+            </div>
+            <div id="typeLegend" style="flex:1;min-width:0"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel flex-1" data-r="200">
+        <div class="panel-h"><span class="t">实时报警</span><span class="more">3 起</span></div>
+        <div class="panel-b"><div class="list" id="alarmList"></div></div>
+      </div>
+    </div>
+  </div>
+  <!-- ====== 底部：3 趋势曲线 ====== -->
+  <div class="mn-foot mt12">
+    <div class="panel" data-r="240">
+      <div class="panel-h"><span class="t">压力趋势</span><span class="more">MPa · 5s刷新</span></div>
+      <div class="panel-b"><canvas id="pressChart" style="width:100%;height:96px"></canvas></div>
+    </div>
+    <div class="panel" data-r="280">
+      <div class="panel-h"><span class="t">浓度趋势</span><span class="more">%LEL · 5s刷新</span></div>
+      <div class="panel-b"><canvas id="concChart" style="width:100%;height:96px"></canvas></div>
+    </div>
+    <div class="panel" data-r="320">
+      <div class="panel-h"><span class="t">流量趋势</span><span class="more">m³/h · 5s刷新</span></div>
+      <div class="panel-b"><canvas id="flowChart" style="width:100%;height:96px"></canvas></div>
+    </div>
+  </div>
+</main>
+<script src="mock.js"></script>
+<script src="shell.js"></script>
+<script src="map.js"></script>
+<script>
+// ====== 顶部 KPI ======
+const alarmCnt=DB.devices.filter(d=>d.alarm).length;
+const offlineCnt=DB.kpi.devices.val-DB.kpi.online.val;
+const mnKpi=[
+  {lab:'物联设备总数',val:fmt(DB.kpi.devices.val),u:'台',trend:DB.kpi.devices.trend,icon:'M2 8l10-6 10 6-10 6L2 8z M2 14l10 6 10-6',cls:''},
+  {lab:'在线设备',val:fmt(DB.kpi.online.val),u:'台 97.2%',trend:DB.kpi.online.trend,icon:'M5 12l5 5L20 7',cls:''},
+  {lab:'报警中',val:fmt(alarmCnt),u:'起',trend:0,icon:'M12 2v4M12 18v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M2 12h4M18 12h4M9 16l3-3 3 3',cls:'danger'},
+  {lab:'离线设备',val:fmt(offlineCnt),u:'台',trend:0,icon:'M2 8l10-6 10 6-10 6L2 8z',cls:'warn'}
+];
+document.getElementById('mnKpi').innerHTML=mnKpi.map((k,i)=>`
+  <div class="kpi" data-r="${i*40}">
+    <div class="glow"></div>
+    <div class="lab">${svgIcon(k.icon,14)} ${k.lab}</div>
+    <div class="val ${k.cls==='danger'?'t-danger':k.cls==='warn'?'t-warn':''}">${k.val}<span class="u">${k.u}</span></div>
+    <div class="trend ${k.trend>0?'up':k.trend<0?'down':'flat'}">${k.trend>0?'▲':k.trend<0?'▼':'—'} ${k.trend?Math.abs(k.trend)+'%':'持平'}</div>
+  </div>`).join('');
+
+// ====== 筛选项 ======
+const distSel=document.getElementById('distFilter');
+DB.districts.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;distSel.appendChild(o)});
+const typeSel=document.getElementById('typeFilter');
+const allTypes=[...new Set(DB.devices.map(d=>d.type))];
+allTypes.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;typeSel.appendChild(o)});
+
+// ====== 设备表 ======
+function renderDevices(dist){
+  const type=typeSel.value;
+  let list=DB.devices.filter(d=>(dist==='全部'||d.loc.startsWith(dist))&&(type==='全部'||d.type===type));
+  const tb=document.getElementById('devTbody');
+  document.getElementById('devCount').textContent=list.length;
+  if(!list.length){tb.innerHTML='<tr><td colspan="6"><div class="empty">暂无符合条件的设备</div></td></tr>';return}
+  tb.innerHTML=list.map(d=>{
+    const i=DB.devices.indexOf(d);
+    return `<tr style="cursor:pointer" onclick="devDetail(${i})">
+      <td class="mono">${d.id}</td><td>${d.type}</td><td>${d.loc}</td>
+      <td class="mono">${d.val}</td><td class="mono">${d.bat}</td>
+      <td>${d.alarm?tag('报警','红'):d.online?'<span class="tag ok">在线</span>':tag('离线','黄')}</td>
+    </tr>`;
+  }).join('');
+}
+function renderType(){renderDevices(distSel.value)}
+renderDevices('全部');
+
+// ====== 设备详情 ======
+function devDetail(i){
+  const d=DB.devices[i];
+  openDrawer('设备详情 · '+d.id,`<div class="field"><div class="k">设备编号</div><div class="v mono">${d.id}</div></div>
+    <div class="field"><div class="k">设备类型</div><div class="v">${d.type}</div></div>
+    <div class="field"><div class="k">安装位置</div><div class="v">${d.loc}</div></div>
+    <div class="field"><div class="k">在线状态</div><div class="v">${d.online?'<span class="t-ok">● 在线</span>':'<span class="t-warn">● 离线</span>'}</div></div>
+    <div class="field"><div class="k">报警状态</div><div class="v">${d.alarm?'<span class="t-danger">● 报警中</span>':'<span class="t-ok">● 正常</span>'}</div></div>
+    <div class="field"><div class="k">最近监测值</div><div class="v mono">${d.val}</div></div>
+    <div class="field"><div class="k">电池电量</div><div class="v mono">${d.bat} <div class="bar mt8" style="width:120px"><i style="width:${parseInt(d.bat)}%"></i></div></div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+// ====== 在线率柱状 + 类型环形 ======
+barChart(document.getElementById('onlineBar'),DB.onlineByDist.map(d=>d.rate),DB.onlineByDist.map(d=>d.dist.replace(/县|市|区/,'')));
+const typeColors=['#22D3EE','#7C3AED','#FBBF24','#22C55E','#FF4D5E'];
+const dTypeAgg={};
+DB.devices.forEach(d=>dTypeAgg[d.type]=(dTypeAgg[d.type]||0)+1);
+const dTypeSegs=Object.entries(dTypeAgg).map(([t,v],i)=>({v,color:typeColors[i%typeColors.length]}));
+donut(document.getElementById('typeDonut'),dTypeSegs);
+document.getElementById('typeLegend').innerHTML=Object.entries(dTypeAgg).map(([t,v],i)=>`
+  <div class="flex jcb fz12 mt8"><span class="t-sub"><i style="width:8px;height:8px;border-radius:50%;background:${typeColors[i]};display:inline-block;margin-right:6px"></i>${t}</span><span class="mono">${v}</span></div>`).join('');
+
+// ====== 实时报警列表 ======
+document.getElementById('alarmList').innerHTML=DB.alarms.slice(0,6).map(a=>{
+  const i=DB.alarms.indexOf(a);
+  return `<div class="row">
+    <span class="t">${a.time.slice(0,5)}</span>${lvlTag(a.lvl)}
+    <span class="c">${a.type} · ${a.loc}</span>
+    <span class="tag ${a.status==='已恢复'||a.status==='已闭环'?'ok':'warn'}">${a.status}</span>
+    <button class="btn sm" onclick="dealAlarm(${i})">处置</button>
+  </div>`;
+}).join('');
+
+// ====== 报警处置表单 ======
+function dealAlarm(i){
+  const a=DB.alarms[i];
+  openDrawer('警情处置 · '+a.id,`<div class="field"><div class="k">警情编号</div><div class="v mono">${a.id}</div></div>
+    <div class="field"><div class="k">发生时间</div><div class="v mono">${a.time}</div></div>
+    <div class="field"><div class="k">报警类型</div><div class="v">${a.type}</div></div>
+    <div class="field"><div class="k">发生位置</div><div class="v">${a.loc}</div></div>
+    <div class="field"><div class="k">级别</div><div class="v">${lvlTag(a.lvl)}</div></div>
+    <div class="field"><div class="k">当前状态</div><div class="v">${a.status} · ${a.deal}</div></div>
+    <div class="field"><div class="k">处置方式</div><div class="v"><select class="sel" style="width:100%"><option>现场抢修</option><option>远程复位</option><option>派单处置</option><option>应急疏散</option></select></div></div>
+    <div class="field"><div class="k">处置人员</div><div class="v"><input class="inp" type="text" placeholder="请输入处置人员姓名"></div></div>
+    <div class="field"><div class="k">处置说明</div><div class="v"><textarea class="inp" placeholder="请输入处置过程说明" style="height:60px;resize:vertical"></textarea></div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer()">提交处置</button></div>`);
+}
+
+// ====== 趋势曲线（5s 刷新） ======
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const trendData={
+  pressure:Array.from({length:24},()=>rnd(0.28,0.42)),
+  conc:Array.from({length:24},()=>rnd(0.04,0.22)),
+  flow:Array.from({length:24},()=>rnd(780,1320))
+};
+const pC=document.getElementById('pressChart'),cC=document.getElementById('concChart'),fC=document.getElementById('flowChart');
+function refreshTrends(){
+  trendData.pressure.push(rnd(0.28,0.42));trendData.pressure.shift();
+  trendData.conc.push(rnd(0.04,0.22));trendData.conc.shift();
+  trendData.flow.push(rnd(780,1320));trendData.flow.shift();
+  lineChart(pC,trendData.pressure,{color:'#22D3EE'});
+  lineChart(cC,trendData.conc,{color:'#FBBF24'});
+  lineChart(fC,trendData.flow,{color:'#7C3AED'});
+}
+refreshTrends();
+setInterval(refreshTrends,5000);
+</script>
+</body>
+</html>

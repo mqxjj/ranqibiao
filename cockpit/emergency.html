@@ -1,0 +1,256 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920,initial-scale=1"><title>应急处置 - 某某智慧燃气监管</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>
+/* 页面专属微调 */
+.state-bar{display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px}
+.state-bar .tabbar{margin:0;border:0}
+/* 事故时间轴（横向） */
+.tl-h{display:flex;align-items:center;gap:0;flex:1}
+.tl-h .nd{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);position:relative;cursor:pointer;transition:.2s}
+.tl-h .nd .num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-family:var(--mono);color:var(--sub);background:rgba(34,211,238,.08);border:1px solid var(--line)}
+.tl-h .nd .nm{font-size:13px;color:var(--sub)}
+.tl-h .nd .ds{font-size:11px;color:var(--dim);text-align:center}
+.tl-h .nd.on{border-color:var(--accent);background:rgba(34,211,238,.12);box-shadow:0 0 14px rgba(34,211,238,.22)}
+.tl-h .nd.on .num{color:#04122A;background:var(--accent);border-color:var(--accent)}
+.tl-h .nd.on .nm{color:var(--accent3);font-weight:600}
+.tl-h .nd.warn.on{border-color:var(--danger);background:rgba(255,77,94,.12);box-shadow:0 0 14px rgba(255,77,94,.25)}
+.tl-h .nd.warn.on .num{background:var(--danger);border-color:var(--danger)}
+.tl-h .ar{flex:0 0 24px;display:flex;align-items:center;justify-content:center;color:var(--dim)}
+.tl-h .ar svg{width:18px;height:18px}
+.res-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.res-card{padding:10px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);display:flex;flex-direction:column;gap:4px;cursor:pointer;transition:.2s}
+.res-card:hover{border-color:var(--accent);box-shadow:0 0 10px rgba(34,211,238,.18)}
+.res-card .nm{font-size:12px;color:var(--sub)}
+.res-card .vl{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--accent3)}
+.res-card .sub{font-size:11px;color:var(--dim)}
+.case-card{padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:.2s;margin-bottom:8px}
+.case-card:hover{border-color:var(--accent2);box-shadow:0 0 10px rgba(124,58,237,.2)}
+.case-card .tt{font-size:13px;font-weight:600;color:var(--text)}
+.case-card .ds{font-size:11px;color:var(--sub);margin-top:3px;line-height:1.5}
+.dept-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.dept-card{padding:10px 8px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);text-align:center;cursor:pointer;transition:.2s}
+.dept-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.dept-card .ic{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;color:var(--accent);background:rgba(34,211,238,.1);border:1px solid var(--accent)}
+.dept-card .ic svg{width:16px;height:16px}
+.dept-card .nm{font-size:12px;color:var(--text)}
+.dept-card .st{font-size:10px;color:var(--success);margin-top:2px}
+.form-in{width:100%;background:rgba(8,17,38,.6);border:1px solid var(--line);color:var(--text);border-radius:var(--r-sm);padding:6px 8px;font-size:12px;font-family:var(--sans);outline:none}
+.form-in:focus{border-color:var(--accent)}
+.chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);padding:5px 8px;border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer}
+.chk:hover{border-color:var(--accent)}
+.chk input{accent-color:var(--accent)}
+.mapwrap{flex:1;min-height:320px;position:relative}
+.acc-pt,.veh-pt,.cam-pt{cursor:pointer}
+.tbl tbody tr{cursor:pointer}
+.war-banner{display:none;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,77,94,.12);border:1px solid var(--danger);border-radius:var(--r-sm);font-size:12px;color:var(--danger)}
+.war-banner.on{display:flex}
+.war-banner .blink{color:var(--danger)}
+@keyframes mring{0%{r:3;opacity:.9}100%{r:14;opacity:0}}
+@keyframes mring2{0%{r:3;opacity:.9}50%{opacity:.5}100%{r:22;opacity:0}}
+.pulse-ring{animation:mring 2s ease-out infinite}
+.pulse-ring2{animation:mring2 2.6s ease-out infinite .6s}
+</style></head><body data-page="emergency"><div class="bg-atmos"></div><header class="topbar"><span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span><div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div><div class="crumb">监管应用 / <b>应急处置</b></div><div class="sp"></div><div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div></header><aside class="sidenav" id="nav"></aside><main class="main">
+  <!-- ====== 状态切换 + 事故时间轴 ====== -->
+  <div class="state-bar" data-r="0">
+    <div class="tabbar" style="margin:0"><button class="on" id="tabDaily" data-s="daily">日常监管</button><button id="tabWar" data-s="war">战时应急</button></div>
+    <div class="war-banner" id="warBanner"><span class="dot blink" style="background:var(--danger);width:7px;height:7px;border-radius:50%"></span> 战时应急已启动 · 事故：长岭县-太平山调压站压力异常（红色）</div>
+    <div class="tl-h" id="accTimeline"></div>
+  </div>
+  <!-- ====== 中部三栏 ====== -->
+  <div class="grid" style="grid-template-columns:1.2fr 1.6fr 1fr;gap:14px;margin-bottom:14px">
+    <!-- 左：应急预案 -->
+    <div class="panel flex-1" data-r="60">
+      <div class="panel-h"><span class="t">应急预案</span><span class="more">共 6 项</span></div>
+      <div class="panel-b">
+        <div id="planList" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+    <!-- 中：调度地图 -->
+    <div class="panel flex-1" data-r="120">
+      <div class="panel-h"><span class="t">应急调度地图</span><span class="more">事故点 · 长岭县</span></div>
+      <div class="panel-b" style="padding:8px;display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="mapwrap" id="emMap"><div id="leafMap" style="width:100%;height:100%;position:absolute;inset:0;z-index:1"></div>
+          <div id="layerCtrl" style="position:absolute;top:12px;right:12px;z-index:500;background:rgba(8,17,38,.85);border:1px solid #1F3A6A;border-radius:8px;padding:10px 12px;font-size:12px;color:#CAD7F0;backdrop-filter:blur(6px);min-width:150px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 右：资源 + 案例 -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="panel" data-r="180">
+        <div class="panel-h"><span class="t">应急资源</span><button class="btn primary" id="btnDispatch" style="font-size:11px;padding:3px 10px">调度</button></div>
+        <div class="panel-b" id="emRes"></div>
+      </div>
+      <div class="panel flex-1" data-r="240">
+        <div class="panel-h"><span class="t">事故案例库</span><button class="btn" id="btnNewCase" style="font-size:11px;padding:3px 10px">+ 新建事故</button></div>
+        <div class="panel-b" id="caseList"></div>
+      </div>
+    </div>
+  </div>
+  <!-- ====== 底部：协同部门 + 事故记录 ====== -->
+  <div class="grid" style="grid-template-columns:1fr 1.4fr;gap:14px">
+    <div class="panel" data-r="280">
+      <div class="panel-h"><span class="t">协同部门</span><span class="more">5 部门联动</span></div>
+      <div class="panel-b"><div class="dept-grid" id="deptGrid"></div></div>
+    </div>
+    <div class="panel" data-r="300">
+      <div class="panel-h"><span class="t">事故记录</span><span class="more">历史闭环</span></div>
+      <div class="panel-b"><table class="tbl"><thead><tr><th>事故编号</th><th>时间</th><th>位置</th><th>类型</th><th>级别</th><th>状态</th></tr></thead><tbody id="accBody"></tbody></table></div>
+    </div>
+  </div>
+</main><script src="mock.js"></script><script src="shell.js"></script><script src="map.js"></script><script>
+// ====== 应急预案（6 条） ======
+const PLANS=[
+  {id:'EP-01',name:'中压管网泄漏Ⅲ级响应',lvl:'橙',scene:'中压管网泄漏',state:'启用'},
+  {id:'EP-02',name:'储备站泄漏Ⅱ级响应',lvl:'红',scene:'储备站泄漏',state:'待命'},
+  {id:'EP-03',name:'第三方破坏抢修Ⅲ级',lvl:'橙',scene:'第三方施工破坏',state:'待命'},
+  {id:'EP-04',name:'户内泄漏应急Ⅳ级',lvl:'黄',scene:'户内燃气泄漏',state:'待命'},
+  {id:'EP-05',name:'次高压管网泄漏Ⅱ级',lvl:'红',scene:'次高压管网泄漏',state:'演练'},
+  {id:'EP-06',name:'大面积停气应急Ⅱ级',lvl:'红',scene:'区域性供气中断',state:'待命'},
+];
+// ====== 事故案例（4 条） ======
+const CASES=[
+  {tt:'2024·长岭县中压管第三方破坏',ds:'第三方施工挖断中压管，启动Ⅲ级响应，2小时内抢修恢复，疏散群众120人',lvl:'橙',loss:'直接损失 18万'},
+  {tt:'2023·宁江区入户管腐蚀泄漏',ds:'老旧小区入户管腐蚀穿孔泄漏，浓度报警触发，入户抢修换管，无人员伤亡',lvl:'黄',loss:'直接损失 4万'},
+  {tt:'2022·前郭县调压站法兰渗漏',ds:'调压站法兰垫片老化渗漏，Ⅱ级响应，关阀抢修，影响供气40分钟',lvl:'橙',loss:'直接损失 9万'},
+  {tt:'2021·扶余市储备站设备故障',ds:'储备站压缩机组故障致压力波动，启动Ⅱ级响应，切换备用机组，未泄漏',lvl:'红',loss:'直接损失 22万'},
+];
+// ====== 协同部门 ======
+const DEPTS=[
+  {nm:'公安',ic:'M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z',st:'警戒疏散'},
+  {nm:'消防',ic:'M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z',st:'灭火救援'},
+  {nm:'卫健',ic:'M9 12h6 M12 8v8 M12 2a10 10 0 100 20 10 10 0 000-20z',st:'医疗救护'},
+  {nm:'交通运输',ic:'M5 11l2-5h10l2 5 M5 11h14v6H5z M7 17v2 M17 17v2',st:'交通管制'},
+  {nm:'应急',ic:'M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z',st:'综合协调'},
+];
+
+// ====== 状态切换 + 时间轴 ======
+let emState='daily'; // daily | war
+let tlCur=0; // 0 事前预案 / 1 事中调度 / 2 事后记录
+const tlSteps=[{nm:'事前预案',ds:'编制预案 · 资源储备 · 演练培训'},{nm:'事中调度',ds:'接警研判 · 启动预案 · 调度资源'},{nm:'事后记录',ds:'现场处置 · 恢复供气 · 总结归档'}];
+function renderTimeline(){
+  document.getElementById('accTimeline').innerHTML=tlSteps.map((s,i)=>`
+    <div class="nd ${emState==='war'&&i===tlCur?'warn on':i===tlCur?'on':''}" data-i="${i}">
+      <div class="num">${i+1}</div><div class="nm">${s.nm}</div><div class="ds">${s.ds}</div></div>
+    ${i<2?`<div class="ar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>`:''}`).join('');
+  document.querySelectorAll('#accTimeline .nd').forEach(el=>el.onclick=()=>{tlCur=+el.dataset.i;renderTimeline();});
+}
+function switchState(s){
+  emState=s;
+  document.getElementById('tabDaily').classList.toggle('on',s==='daily');
+  document.getElementById('tabWar').classList.toggle('on',s==='war');
+  document.getElementById('warBanner').classList.toggle('on',s==='war');
+  tlCur=s==='war'?1:0;renderTimeline();
+}
+document.getElementById('tabDaily').onclick=()=>switchState('daily');
+document.getElementById('tabWar').onclick=()=>switchState('war');
+renderTimeline();
+
+// ====== 预案列表（卡片式，中文等级key） ======
+const LVLCLR={'红':'#FF4D5E','橙':'#F97316','黄':'#FBBF24','蓝':'#22D3EE'};
+const LVLBGFY={'红':'rgba(255,77,94,.12)','橙':'rgba(249,115,22,.14)','黄':'rgba(251,191,36,.14)','蓝':'rgba(34,211,238,.12)'};
+document.getElementById('planList').innerHTML=PLANS.map(p=>`
+  <div class="plan-card" data-id="${p.id}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.12);border-radius:8px;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='var(--accent)';this.style.background='rgba(34,211,238,.08)'" onmouseout="this.style.borderColor='rgba(34,211,238,.12)';this.style.background='rgba(34,211,238,.04)'">
+    <div style="width:3px;height:32px;border-radius:2px;background:${LVLCLR[p.lvl]||'#22D3EE'};flex-shrink:0"></div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <span style="font-size:12px;font-weight:600;color:var(--text)">${p.name}</span>
+        <span style="font-size:10px;color:${LVLCLR[p.lvl]||'#22D3EE'};background:${LVLBGFY[p.lvl]||'rgba(34,211,238,.12)'};border:1px solid ${LVLCLR[p.lvl]||'#22D3EE'};border-radius:3px;padding:1px 6px">${p.lvl}级</span>
+      </div>
+      <div style="font-size:10px;color:var(--sub);display:flex;align-items:center;gap:8px">
+        <span class="mono">${p.id}</span>
+        <span>·</span>
+        <span>${p.scene}</span>
+        <span style="margin-left:auto;color:${p.state==='启用'?'#22D3EE':p.state==='待命'?'#FBBF24':'#8B9EC4'}">● ${p.state}</span>
+      </div>
+    </div>
+    <button class="btn primary" style="font-size:11px;padding:4px 10px;flex-shrink:0" onclick="event.stopPropagation();openDispatch('${p.id}')">启动</button>
+  </div>`).join('');
+document.querySelectorAll('#planList .plan-card').forEach(el=>el.onclick=()=>openPlanDetail(el.dataset.id));
+
+function openPlanDetail(id){
+  const p=PLANS.find(x=>x.id===id);
+  openDrawer('预案详情 · '+p.id,`
+    <div class="field"><div class="k">预案名称</div><div class="v">${p.name}</div></div>
+    <div class="field"><div class="k">响应级别</div><div class="v">${lvlTag(p.lvl)}</div></div>
+    <div class="field"><div class="k">适用场景</div><div class="v">${p.scene}</div></div>
+    <div class="field"><div class="k">当前状态</div><div class="v">${tag(p.state,p.lvl)}</div></div>
+    <div class="field"><div class="k">处置流程</div><div class="v">接警研判 → 启动预案 → 资源调度 → 现场处置 → 恢复供气 → 总结归档</div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button><button class="btn primary" onclick="closeDrawer();openDispatch('${p.id}')">启动预案</button></div>`);
+}
+
+// ====== 调度抽屉（选车辆/队伍/物资/专家） ======
+const em=DB.emergency;
+function openDispatch(planId){
+  const p=PLANS.find(x=>x.id===planId)||PLANS[0];
+  const vehHtml=em.vehicles.map((v,i)=>`<label class="chk"><input type="checkbox" ${i<3?'checked':''}> ${v.n} <span class="mono t-sub">${v.on}/${v.v}</span></label>`).join('');
+  const teamHtml=em.teams.map((t,i)=>`<label class="chk"><input type="checkbox" ${i<2?'checked':''}> ${t.n} <span class="mono t-sub">${t.v}支</span></label>`).join('');
+  const matHtml=em.materials.map((m,i)=>`<label class="chk"><input type="checkbox" ${i<2?'checked':''}> ${m.n} <span class="mono t-sub">${m.v}</span></label>`).join('');
+  const expHtml=em.experts.map(e=>`<label class="chk"><input type="checkbox" checked> ${e.n} <span class="t-sub">${e.t}</span></label>`).join('');
+  openDrawer('应急调度 · '+p.name,`
+    <div class="field"><div class="k">启动预案</div><div class="v">${p.id} ${p.name} ${lvlTag(p.lvl)}</div></div>
+    <div class="field"><div class="k">事故位置</div><div class="v">长岭县-太平山调压站</div></div>
+    <div class="field"><div class="k">调度车辆</div><div class="res-grid">${vehHtml}</div></div>
+    <div class="field"><div class="k">调度队伍</div><div class="res-grid">${teamHtml}</div></div>
+    <div class="field"><div class="k">调度物资</div><div class="res-grid">${matHtml}</div></div>
+    <div class="field"><div class="k">调度专家</div><div style="display:flex;flex-wrap:wrap;gap:6px">${expHtml}</div></div>
+    <div class="field"><div class="k">调度指令</div><textarea class="form-in" rows="2" placeholder="请输入调度指令...">立即前往事故现场，按预案开展应急处置</textarea></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer();alert('调度指令已下发，'+em.vehicles.length+'类车辆、'+em.teams.length+'类队伍已出动')">确认调度</button></div>`);
+}
+document.getElementById('btnDispatch').onclick=()=>openDispatch('EP-01');
+
+// ====== 应急资源卡片 ======
+document.getElementById('emRes').innerHTML=`
+  <div class="fz12 t-sub fw6" style="margin-bottom:6px">应急车辆</div>
+  <div class="res-grid" style="margin-bottom:10px">${em.vehicles.map(v=>`<div class="res-card" onclick="openDispatch('EP-01')"><div class="nm">${v.n}</div><div class="vl">${v.on}<span style="font-size:12px;color:var(--dim)">/${v.v}</span></div><div class="sub">在线出动</div></div>`).join('')}</div>
+  <div class="fz12 t-sub fw6" style="margin-bottom:6px">应急队伍</div>
+  <div class="res-grid" style="margin-bottom:10px">${em.teams.map(t=>`<div class="res-card" onclick="openDispatch('EP-01')"><div class="nm">${t.n}</div><div class="vl">${t.v}<span style="font-size:12px;color:var(--dim)">支</span></div><div class="sub">待命</div></div>`).join('')}</div>
+  <div class="fz12 t-sub fw6" style="margin-bottom:6px">应急物资 / 专家</div>
+  <div class="res-grid">${em.materials.slice(0,2).map(m=>`<div class="res-card"><div class="nm">${m.n}</div><div class="vl">${m.v}</div><div class="sub">储备</div></div>`).join('')}${em.experts.slice(0,2).map(e=>`<div class="res-card"><div class="nm">${e.n}</div><div class="vl" style="font-size:13px">${e.t}</div><div class="sub">${e.o}</div></div>`).join('')}</div>`;
+
+// ====== 案例库 ======
+document.getElementById('caseList').innerHTML=CASES.map((c,i)=>`<div class="case-card" data-i="${i}">
+  <div class="flex aic jcb"><div class="tt">${c.tt}</div>${lvlTag(c.lvl)}</div>
+  <div class="ds">${c.ds}</div><div class="ds t-warn">${c.loss}</div></div>`).join('');
+document.querySelectorAll('.case-card').forEach(el=>el.onclick=()=>{
+  const c=CASES[+el.dataset.i];
+  openDrawer('事故案例 · '+c.tt,`
+    <div class="field"><div class="k">案例名称</div><div class="v">${c.tt}</div></div>
+    <div class="field"><div class="k">响应级别</div><div class="v">${lvlTag(c.lvl)}</div></div>
+    <div class="field"><div class="k">处置经过</div><div class="v">${c.ds}</div></div>
+    <div class="field"><div class="k">损失情况</div><div class="v t-warn">${c.loss}</div></div>
+    <div class="field"><div class="k">经验教训</div><div class="v">加强第三方施工监管、完善应急预案、提升抢修时效、强化部门协同</div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+});
+document.getElementById('btnNewCase').onclick=()=>{
+  openDrawer('新建事故',`
+    <div class="field"><div class="k">事故名称</div><input class="form-in" placeholder="如 2026·某区中压管泄漏"></div>
+    <div class="field"><div class="k">响应级别</div><select class="form-in"><option>红</option><option>橙</option><option>黄</option></select></div>
+    <div class="field"><div class="k">事故位置</div><input class="form-in" placeholder="如 宁江区-松江大街"></div>
+    <div class="field"><div class="k">事故经过</div><textarea class="form-in" rows="3" placeholder="请描述事故经过..."></textarea></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer();alert('事故已登记，编号 ACC-2609001')">登记入库</button></div>`);
+};
+
+// ====== 协同部门 ======
+document.getElementById('deptGrid').innerHTML=DEPTS.map(d=>`<div class="dept-card" data-nm="${d.nm}">
+  <div class="ic">${svgIcon(d.ic,16)}</div><div class="nm">${d.nm}</div><div class="st">● ${emState==='war'?'已联动':'待命'}</div></div>`).join('');
+document.querySelectorAll('.dept-card').forEach(el=>el.onclick=()=>{
+  const d=DEPTS.find(x=>x.nm===el.dataset.nm);
+  openDrawer('协同部门 · '+d.nm,`<div class="field"><div class="k">部门</div><div class="v">${d.nm}</div></div><div class="field"><div class="k">职责</div><div class="v">${d.st}</div></div><div class="field"><div class="k">协同状态</div><div class="v"><span class="tag ok">${emState==='war'?'已联动':'待命'}</span></div></div><div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+});
+
+// ====== 事故记录表（来源 DB.alarms 红橙已闭环/已恢复） ======
+const accs=DB.alarms.filter(a=>(a.lvl==='红'||a.lvl==='橙')&&(a.status==='已闭环'||a.status==='已恢复'));
+document.getElementById('accBody').innerHTML=accs.map((a,i)=>`<tr>
+  <td class="mono t-accent">ACC-26${(700+i).toString().padStart(4,'0')}</td>
+  <td class="mono">${a.time}</td><td class="t-sub">${a.loc}</td><td>${a.type}</td><td>${lvlTag(a.lvl)}</td><td>${tag(a.status,a.lvl)}</td></tr>`).join('');
+
+// ====== 真实地图（Leaflet + 图层勾选） ======
+(function initRealMap(){
+  function go(){
+    if(typeof L==='undefined'){return setTimeout(go,500)}
+    const el=document.getElementById('leafMap');if(!el)return;
+    const gm=initGasMap('leafMap',{theme:'emergency'});
+    if(gm){gm.renderLayerCtrl('layerCtrl');setTimeout(()=>gm.map.invalidateSize(),200);}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+})();
+</script></body></html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>燃气风险评估 - 某某智慧燃气监管</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* 仅页面专属布局微调 */
+.rk-body{display:grid;grid-template-columns:280px 1fr 380px;gap:14px}
+select.sel{padding:5px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:var(--sans);outline:none;cursor:pointer}
+select.sel option{background:var(--bg2)}
+select.sel:focus{border-color:var(--accent)}
+.minibar{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}
+.minibar .lab{flex:0 0 48px;color:var(--sub)}
+.minibar .bar{flex:1}
+.minibar .num{font-family:var(--mono);color:var(--accent3);flex:0 0 30px;text-align:right}
+.rksec{margin-bottom:14px}
+.rksec:last-child{margin-bottom:0}
+.rksec .sh{font-size:12px;color:var(--sub);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.rksec .sh::before{content:"";width:2px;height:11px;background:var(--accent);border-radius:1px;box-shadow:0 0 6px var(--accent)}
+.legend-row{cursor:pointer;transition:.15s}
+.legend-row:hover{color:var(--accent3)}
+.report-body{font-size:13px;line-height:1.9}
+.report-body h4{color:var(--accent3);margin:10px 0 4px;font-size:13px}
+</style>
+</head>
+<body data-page="risk">
+<div class="bg-atmos"></div>
+<header class="topbar">
+<span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span>
+<div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div>
+<div class="crumb">监管应用 / <b>燃气风险评估</b></div>
+<div class="sp"></div>
+<div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div>
+</header>
+<aside class="sidenav" id="nav"></aside>
+<main class="main">
+  <div class="rk-body">
+    <!-- ====== 左：四色图 + 分级条 + 趋势 ====== -->
+    <div class="panel flex-1" data-r="60">
+      <div class="panel-h"><span class="t">风险四色图</span><span class="more">10处</span></div>
+      <div class="panel-b">
+        <div class="rksec">
+          <div class="flex gap12 aic">
+            <div class="donut" style="width:110px;height:110px;flex:0 0 110px">
+              <canvas id="riskDonut" style="width:110px;height:110px"></canvas>
+              <div class="cap"><div class="v">10</div><div class="l">风险区</div></div>
+            </div>
+            <div id="riskLegend" style="flex:1;min-width:0"></div>
+          </div>
+        </div>
+        <div class="rksec">
+          <div class="sh">风险分级</div>
+          <div id="lvlBars"></div>
+        </div>
+        <div class="rksec">
+          <div class="sh">报警趋势 · 近7日</div>
+          <canvas id="riskTrend" style="width:100%;height:80px"></canvas>
+        </div>
+      </div>
+    </div>
+    <!-- ====== 中：风险清单表 ====== -->
+    <div class="panel flex-1" data-r="120">
+      <div class="panel-h"><span class="t">风险清单</span><span class="more" id="riskCount">10条</span></div>
+      <div class="panel-b">
+        <div class="toolbar">
+          <select class="sel" id="lvlFilter" onchange="renderRisks()"><option value="全部">全部等级</option></select>
+          <select class="sel" id="distFilter" onchange="renderRisks()"><option value="全部">全部区县</option></select>
+          <div class="sp"></div>
+          <button class="btn" onclick="resetFilter()">重置</button>
+        </div>
+        <table class="tbl">
+          <thead><tr><th>区域</th><th>等级</th><th>分值</th><th>管段数</th></tr></thead>
+          <tbody id="riskTbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- ====== 右：评估报告 + 对比柱状 ====== -->
+    <div class="fcol gap12" style="min-width:0">
+      <div class="panel" data-r="180">
+        <div class="panel-h"><span class="t">评估报告</span><span class="more">2026.09</span></div>
+        <div class="panel-b">
+          <div class="fz12 t-sub">评估摘要</div>
+          <div class="mt8 fz13">全市燃气风险<b class="t-ok">总体可控</b>，红色风险区 <b class="t-danger">3</b> 处重点关注，橙色 <b class="t-warn">3</b> 处加强管控，覆盖 5 区县 10 风险区。</div>
+          <div class="mt8 fz12 t-sub">评估周期：2026年9月 · 多维评分法</div>
+          <div class="mt12 flex gap8">
+            <button class="btn primary" onclick="reportDetail()">生成报告</button>
+            <button class="btn" onclick="downloadReport()">下载</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel flex-1" data-r="240">
+        <div class="panel-h"><span class="t">风险对比 · Top5</span></div>
+        <div class="panel-b">
+          <canvas id="compareBar" style="width:100%;height:120px"></canvas>
+          <div class="mt8 fz12 t-sub">评估正向<b class="t-accent">预警式、诊断式</b>转化：由事后处置转向事前预测，结合管网属性、运行参数、隐患密度、报警频次多维评分，输出分级管控清单与处置优先级。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="mock.js"></script>
+<script src="shell.js"></script>
+<script src="map.js"></script>
+<script>
+// ====== 风险聚合 ======
+const riskColors={红:'#FF4D5E',橙:'#FB923C',黄:'#FBBF24',蓝:'#22D3EE'};
+const riskCount={};
+DB.risks.forEach(r=>riskCount[r.lvl]=(riskCount[r.lvl]||0)+1);
+const lvls=['红','橙','黄','蓝'];
+lvls.forEach(l=>{if(!(l in riskCount))riskCount[l]=0});
+
+// 四色环形
+donut(document.getElementById('riskDonut'),lvls.map(l=>({v:riskCount[l],color:riskColors[l]})));
+// 图例（可点击切换筛选）
+document.getElementById('riskLegend').innerHTML=lvls.map(l=>`
+  <div class="flex jcb fz12 mt8 legend-row" onclick="filterByLvl('${l}')">
+    <span class="lvl ${LVLCLS[l]}"><i></i>${l}色区</span><span class="mono t-accent">${riskCount[l]} 处</span>
+  </div>`).join('');
+// 分级条
+document.getElementById('lvlBars').innerHTML=lvls.map(l=>`
+  <div class="minibar"><span class="lab">${l}色</span>
+  <div class="bar ${l==='红'?'danger':l==='橙'?'warn':''}"><i style="width:${riskCount[l]*30}%"></i></div>
+  <span class="num">${riskCount[l]}</span></div>`).join('');
+// 趋势
+lineChart(document.getElementById('riskTrend'),DB.alarmTrend,{color:'#22D3EE'});
+
+// ====== 筛选项 ======
+const lvlSel=document.getElementById('lvlFilter');
+lvls.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=l+'色';lvlSel.appendChild(o)});
+const distSel=document.getElementById('distFilter');
+DB.districts.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;distSel.appendChild(o)});
+
+// ====== 风险清单表 ======
+function renderRisks(){
+  const lvl=lvlSel.value,dist=distSel.value;
+  let list=DB.risks.filter(r=>(lvl==='全部'||r.lvl===lvl)&&(dist==='全部'||r.area.startsWith(dist)));
+  document.getElementById('riskCount').textContent=list.length+'条';
+  const tb=document.getElementById('riskTbody');
+  if(!list.length){tb.innerHTML='<tr><td colspan="4"><div class="empty">暂无符合条件的风险</div></td></tr>';return}
+  tb.innerHTML=list.map(r=>{
+    const i=DB.risks.indexOf(r);
+    return `<tr style="cursor:pointer" onclick="riskDetail(${i})">
+      <td>${r.area}</td><td>${lvlTag(r.lvl)}</td>
+      <td class="mono t-accent">${r.score}</td><td class="mono">${r.segs}</td>
+    </tr>`;
+  }).join('');
+}
+function resetFilter(){lvlSel.value='全部';distSel.value='全部';renderRisks()}
+function filterByLvl(l){lvlSel.value=l;renderRisks()}
+renderRisks();
+
+// ====== 区域评估详情 ======
+function riskDetail(i){
+  const r=DB.risks[i];
+  const advice={红:'立即处置，限期整改，提级管控',橙:'重点管控，加密巡查，制定整改计划',黄:'常态关注，定期复查',蓝:'常规管理，保持监测'};
+  openDrawer('区域评估 · '+r.area,`<div class="field"><div class="k">风险区域</div><div class="v">${r.area}</div></div>
+    <div class="field"><div class="k">风险等级</div><div class="v">${lvlTag(r.lvl)}</div></div>
+    <div class="field"><div class="k">综合分值</div><div class="v mono t-accent">${r.score} 分</div></div>
+    <div class="field"><div class="k">涉及管段</div><div class="v mono">${r.segs} 段</div></div>
+    <div class="field"><div class="k">管控建议</div><div class="v">${advice[r.lvl]}</div></div>
+    <div class="field"><div class="k">关联隐患</div><div class="v mono">${DB.hidden.filter(h=>h.loc.includes(r.area.split('-')[1]||'')).length||'--'} 项</div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+// ====== 对比柱状 Top5 ======
+const top5=[...DB.risks].sort((a,b)=>b.score-a.score).slice(0,5);
+barChart(document.getElementById('compareBar'),top5.map(r=>r.score),top5.map(r=>r.area.split('-')[1]||r.area));
+
+// ====== 评估报告全文 ======
+function reportDetail(){
+  const reds=DB.risks.filter(r=>r.lvl==='红');
+  const html=`<div class="report-body">
+    <h4>某某市燃气风险评估报告</h4>
+    <div class="t-sub fz12">评估周期：2026年9月 · 编制单位：住建局</div>
+    <h4>一、总体评估</h4>
+    <div>全市燃气安全风险<b class="t-ok">总体可控</b>，共识别风险区 <b class="mono">${DB.risks.length}</b> 处，其中红色 <b class="t-danger mono">${riskCount['红']}</b>、橙色 <b class="t-warn mono">${riskCount['橙']}</b>、黄色 <b class="t-warn mono">${riskCount['黄']}</b>、蓝色 <b class="t-accent mono">${riskCount['蓝']}</b>。</div>
+    <h4>二、红色风险区（重点关注）</h4>
+    ${reds.map((r,i)=>`<div>${i+1}. ${r.area}（${r.score}分，${r.segs}管段）</div>`).join('')}
+    <h4>三、管控建议</h4>
+    <div>· 红色风险区立即处置、限期整改、提级管控；</div>
+    <div>· 橙色风险区重点管控、加密巡查、制定整改计划；</div>
+    <div>· 黄/蓝色风险区常态关注、定期复查。</div>
+    <h4>四、评估方法</h4>
+    <div>基于管网属性、运行参数、隐患密度、报警频次多维评分，采用四色分级（红≥70/橙55-69/黄35-54/蓝＜35），正向预警式、诊断式转化。</div>
+  </div>
+  <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`;
+  openDrawer('燃气风险评估报告',html);
+}
+function downloadReport(){
+  openDrawer('下载评估报告',`<div class="field"><div class="k">报告名称</div><div class="v">某某市燃气风险评估报告-202609.pdf</div></div>
+    <div class="field"><div class="k">文件大小</div><div class="v mono">1.86 MB</div></div>
+    <div class="field"><div class="k">生成时间</div><div class="v mono">${new Date().toLocaleString('zh-CN')}</div></div>
+    <div class="field"><div class="k">说明</div><div class="v">报告已生成，可下载归档。本报告由系统自动编制，仅供监管决策参考。</div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer()">确认下载</button></div>`);
+}
+</script>
+</body>
+</html>

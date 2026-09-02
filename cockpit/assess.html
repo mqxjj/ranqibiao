@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>考核评价 - 某某智慧燃气监管</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+.tab-pane{display:none}.tab-pane.on{display:block}
+.radar-wrap{position:relative;display:flex;align-items:center;justify-content:center}
+.dim-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.dim-tabs button{padding:4px 12px;background:rgba(8,17,38,.6);border:1px solid var(--line);border-radius:4px;color:var(--sub);font-size:12px;cursor:pointer;font-family:var(--sans);transition:.2s}
+.dim-tabs button:hover{color:var(--text)}
+.dim-tabs button.on{color:var(--accent3);border-color:var(--accent);background:rgba(34,211,238,.12)}
+.rank-card{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-sm);margin-bottom:8px;background:var(--panel2);border:1px solid var(--line);transition:.2s;cursor:pointer}
+.rank-card:hover{border-color:var(--accent);box-shadow:0 0 10px rgba(34,211,238,.18)}
+.rank-card .ri{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:16px;flex:0 0 34px}
+.rank-card .ri.g1{background:linear-gradient(135deg,#FCD34D,#F59E0B);color:#3B1D0E;box-shadow:0 0 10px rgba(252,211,77,.4)}
+.rank-card .ri.g2{background:linear-gradient(135deg,#E5E7EB,#9CA3AF);color:#1F2937;box-shadow:0 0 10px rgba(229,231,235,.3)}
+.rank-card .ri.g3{background:linear-gradient(135deg,#FB923C,#C2410C);color:#2A0E02;box-shadow:0 0 10px rgba(251,146,60,.3)}
+.rank-card .rn{flex:1;font-size:13px}
+.rank-card .rv{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent3)}
+.ent-pick{display:flex;gap:6px;flex-wrap:wrap}
+.ent-pick button{padding:3px 10px;background:rgba(8,17,38,.6);border:1px solid var(--line);border-radius:4px;color:var(--sub);font-size:11px;cursor:pointer;font-family:var(--sans);transition:.2s}
+.ent-pick button.on{color:var(--accent3);border-color:var(--accent);background:rgba(34,211,238,.12)}
+.legend-dot{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--sub)}
+.legend-dot i{width:10px;height:10px;border-radius:2px}
+.sum-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm)}
+.sum-item .si{width:32px;height:32px;border-radius:8px;background:rgba(34,211,238,.12);display:flex;align-items:center;justify-content:center;color:var(--accent);flex:0 0 32px}
+.sum-item .si svg{width:16px;height:16px}
+.sum-item .st{font-size:13px;font-weight:600;margin-bottom:2px}
+.sum-item .sd{font-size:11px;color:var(--sub);line-height:1.5}
+</style>
+</head>
+<body data-page="assess">
+<div class="bg-atmos"></div>
+<header class="topbar"><span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span><div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div><div class="crumb">监管应用 / <b>考核评价</b></div><div class="sp"></div><div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div></header>
+<aside class="sidenav" id="nav"></aside>
+<main class="main">
+<div class="tabbar" id="atab">
+  <button class="on" data-tab="ent">企业考评</button>
+  <button data-tab="dept">部门内部考评</button>
+</div>
+<div class="grid" style="grid-template-columns:1fr 400px">
+  <!-- 左：综合打分表 -->
+  <div class="panel flex-1" data-r="0">
+    <div class="panel-h"><span class="t">综合打分表</span><div class="flex gap8"><button class="btn" onclick="exportReport()">下载导出</button><button class="btn primary" onclick="shareReport()">分享</button></div></div>
+    <div class="panel-b">
+      <table class="tbl">
+        <thead><tr><th>排名</th><th>企业</th><th>安全指数</th><th>隐患整治</th><th>投诉处置</th><th>工作部署</th><th>总分</th><th>等级</th></tr></thead>
+        <tbody id="scoreBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <!-- 右：图表区 -->
+  <div class="fcol gap12">
+    <!-- 雷达图 + 排名 -->
+    <div class="panel" data-r="60">
+      <div class="panel-h"><span class="t">多维考评雷达图</span><span class="more">对比分析</span></div>
+      <div class="panel-b">
+        <div class="ent-pick mb8" id="entPick"></div>
+        <div class="radar-wrap"><canvas id="radarCv" style="width:100%;height:220px"></canvas></div>
+        <div class="flex jcb mt8" id="radarLegend"></div>
+      </div>
+    </div>
+    <!-- 排名榜 -->
+    <div class="panel" data-r="120">
+      <div class="panel-h"><span class="t">综合排名榜 · 前三</span></div>
+      <div class="panel-b" id="rankList"></div>
+    </div>
+    <!-- 维度柱状 + 分布环形 -->
+    <div class="panel" data-r="180">
+      <div class="panel-h"><span class="t">各维度对比</span></div>
+      <div class="panel-b">
+        <div class="dim-tabs mb8" id="dimTabs">
+          <button class="on" data-dim="safety">安全指数</button>
+          <button data-dim="hidden">隐患整治</button>
+          <button data-dim="complaint">投诉处置</button>
+          <button data-dim="deploy">工作部署</button>
+          <button data-dim="total">总分</button>
+        </div>
+        <canvas id="dimChart" style="width:100%;height:120px"></canvas>
+        <div class="flex aic gap12 mt12">
+          <div class="donut" style="width:90px;height:90px;flex:0 0 90px">
+            <canvas id="gradeDonut" style="width:90px;height:90px"></canvas>
+            <div class="cap"><div class="v" id="aCount">0</div><div class="l">A级企业</div></div>
+          </div>
+          <div style="flex:1" id="gradeLegend"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- 底部：评价说明 -->
+<div class="panel mt12" data-r="240">
+  <div class="panel-h"><span class="t">评价说明</span><span class="more">汇总报告</span></div>
+  <div class="panel-b">
+    <div class="grid g-4" id="sumGrid"></div>
+    <div class="mt12 fz12" style="color:var(--sub);line-height:1.8">
+      本期考评汇总：事故 <b class="t-ok mono">0</b> 起、隐患整治 <b class="t-accent mono">43</b> 项、投诉处置 <b class="t-accent mono">286</b> 件、工作部署 <b class="t-accent mono">12</b> 项、监督检查 <b class="t-accent mono">186</b> 次。可视化图表报表已生成，支持导出 PDF / Excel 并一键分享至相关科室与企业。
+    </div>
+  </div>
+</div>
+</main>
+<script src="mock.js"></script>
+<script src="shell.js"></script>
+<script src="map.js"></script>
+<script>
+/* ====== 雷达图自绘 ====== */
+function radarChart(canvas,axes,series){
+  const ctx=canvas.getContext('2d');const dpr=window.devicePixelRatio||1;
+  const W=canvas.clientWidth,H=canvas.clientHeight;
+  canvas.width=W*dpr;canvas.height=H*dpr;ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2,cy=H/2,R=Math.min(W,H)/2-28;
+  const n=axes.length;
+  for(let r=1;r<=4;r++){
+    ctx.beginPath();
+    for(let i=0;i<=n;i++){const a=-Math.PI/2+i*2*Math.PI/n;const rr=R*r/4;const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+    ctx.closePath();ctx.strokeStyle='rgba(34,211,238,.08)';ctx.lineWidth=1;ctx.stroke();
+  }
+  for(let i=0;i<n;i++){const a=-Math.PI/2+i*2*Math.PI/n;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);ctx.strokeStyle='rgba(34,211,238,.12)';ctx.stroke();}
+  series.forEach(s=>{
+    ctx.beginPath();
+    s.data.forEach((v,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;const rr=v/100*R;const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.closePath();ctx.fillStyle=s.color;ctx.globalAlpha=.15;ctx.fill();ctx.globalAlpha=1;
+    ctx.strokeStyle=s.color;ctx.lineWidth=2;ctx.shadowColor=s.color;ctx.shadowBlur=6;ctx.stroke();ctx.shadowBlur=0;
+    s.data.forEach((v,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;const rr=v/100*R;ctx.beginPath();ctx.arc(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr,3,0,7);ctx.fillStyle=s.color;ctx.fill();});
+  });
+  ctx.fillStyle='#8FA8C8';ctx.font='11px sans-serif';ctx.textAlign='center';
+  axes.forEach((label,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;const x=cx+Math.cos(a)*(R+16),y=cy+Math.sin(a)*(R+16)+4;ctx.fillText(label,x,y);});
+}
+
+/* ====== 数据 ====== */
+const AXES=['安全','隐患','投诉','部署','总分'];
+const COLORS=['#22D3EE','#7C3AED'];
+let picked=[0,2]; // 默认对比第1、3家
+
+/* ====== 打分表（按总分排序）====== */
+const sorted=[...DB.assess].sort((a,b)=>b.total-a.total);
+document.getElementById('scoreBody').innerHTML=sorted.map((a,i)=>`
+  <tr onclick="openScoreDetail('${a.ent}')" style="cursor:pointer">
+    <td><span class="mono t-accent fw6">${i+1}</span></td>
+    <td>${a.ent}</td>
+    <td class="mono">${a.safety}</td>
+    <td class="mono">${a.hidden}</td>
+    <td class="mono">${a.complaint}</td>
+    <td class="mono">${a.deploy}</td>
+    <td class="mono t-accent fw6 fz16">${a.total}</td>
+    <td>${a.rank==='A'?'<span class="tag ok">A 级</span>':'<span class="tag warn">B 级</span>'}</td>
+  </tr>`).join('');
+
+/* ====== 企业选择器 ====== */
+function renderEntPick(){
+  document.getElementById('entPick').innerHTML=DB.assess.map((a,i)=>{
+    const on=picked.includes(i);
+    return `<button class="${on?'on':''}" onclick="toggleEnt(${i})">${a.ent}</button>`;
+  }).join('');
+  drawRadar();
+}
+function toggleEnt(i){
+  if(picked.includes(i))picked=picked.filter(x=>x!==i);
+  else if(picked.length<2)picked.push(i);
+  else picked=[picked[1],i];
+  renderEntPick();
+}
+function drawRadar(){
+  const series=picked.map((idx,i)=>({name:DB.assess[idx].ent,color:COLORS[i],data:[DB.assess[idx].safety,DB.assess[idx].hidden,DB.assess[idx].complaint,DB.assess[idx].deploy,DB.assess[idx].total]}));
+  radarChart(document.getElementById('radarCv'),AXES,series);
+  document.getElementById('radarLegend').innerHTML=series.map(s=>`<span class="legend-dot"><i style="background:${s.color}"></i>${s.name} <span class="mono t-accent">${s.data[4]}</span></span>`).join('');
+}
+renderEntPick();
+
+/* ====== 排名榜 ====== */
+const medal=['g1','g2','g3'];
+document.getElementById('rankList').innerHTML=sorted.slice(0,3).map((a,i)=>`
+  <div class="rank-card" onclick="openScoreDetail('${a.ent}')">
+    <div class="ri ${medal[i]}">${i+1}</div>
+    <div class="rn">${a.ent}<div class="t-sub fz12">${a.dist||'松原市'} · ${a.rank}级</div></div>
+    <div class="rv">${a.total}</div>
+  </div>`).join('');
+
+/* ====== 维度柱状 ====== */
+let curDim='safety';
+const dimLabels={safety:'安全指数',hidden:'隐患整治',complaint:'投诉处置',deploy:'工作部署',total:'总分'};
+function drawDim(){
+  const data=DB.assess.map(a=>a[curDim]);
+  const labels=DB.assess.map(a=>a.ent.replace('松原','').replace('燃气',''));
+  barChart(document.getElementById('dimChart'),data,labels,{color:'#22D3EE'});
+}
+drawDim();
+document.querySelectorAll('#dimTabs button').forEach(b=>{
+  b.onclick=()=>{document.querySelectorAll('#dimTabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');curDim=b.dataset.dim;drawDim();};
+});
+
+/* ====== 等级分布环形 ====== */
+const aCount=DB.assess.filter(a=>a.rank==='A').length;
+const bCount=DB.assess.filter(a=>a.rank==='B').length;
+document.getElementById('aCount').textContent=aCount;
+donut(document.getElementById('gradeDonut'),[{v:aCount,color:'#22C55E'},{v:bCount,color:'rgba(251,191,36,.5)'}]);
+document.getElementById('gradeLegend').innerHTML=`
+  <div class="flex jcb fz12"><span class="legend-dot"><i style="background:#22C55E"></i>A 级</span><span class="mono t-ok">${aCount} 家</span></div>
+  <div class="flex jcb fz12 mt8"><span class="legend-dot"><i style="background:rgba(251,191,36,.7)"></i>B 级</span><span class="mono t-warn">${bCount} 家</span></div>
+  <div class="flex jcb fz12 mt8"><span class="t-sub">合计</span><span class="mono t-accent">${DB.assess.length} 家</span></div>`;
+
+/* ====== 评价说明汇总 ====== */
+const sumItems=[
+  {t:'事故',v:0,u:'起',c:'#22C55E',icon:'M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z'},
+  {t:'隐患整治',v:43,u:'项',c:'#22D3EE',icon:'M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z'},
+  {t:'投诉处置',v:286,u:'件',c:'#7C3AED',icon:'M21 11.5a8.5 8.5 0 01-12.5 7.5L3 21l2-5.5A8.5 8.5 0 1121 11.5z'},
+  {t:'工作部署',v:12,u:'项',c:'#FBBF24',icon:'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'},
+];
+document.getElementById('sumGrid').innerHTML=sumItems.map(s=>`
+  <div class="sum-item">
+    <div class="si" style="color:${s.c};background:${s.c}22">${svgIcon(s.icon,16,16)}</div>
+    <div style="flex:1">
+      <div class="st">${s.t}</div>
+      <div class="sd"><span class="mono" style="color:${s.c};font-size:18px;font-weight:700">${fmt(s.v)}</span> ${s.u}</div>
+    </div>
+  </div>`).join('');
+
+/* ====== Tab 切换 ====== */
+document.querySelectorAll('#atab button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#atab button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    const tab=b.dataset.tab;
+    if(tab==='dept'){
+      openDrawer('部门内部考评',`<div class="field"><div class="k">考评对象</div><div class="v">住建局燃气监管科、应急科、执法大队</div></div><div class="field"><div class="k">考评维度</div><div class="v">工作部署执行率、监督检查完成率、隐患整改督办、投诉分派响应</div></div><div class="field"><div class="k">说明</div><div class="v t-sub fz12">演示页，部门考评数据暂未接入，可在此录入科室绩效</div></div><div class="df"><button class="btn primary" onclick="closeDrawer()">知道了</button></div>`);
+    }
+  };
+});
+
+/* ====== 抽屉：企业评分明细 ====== */
+function openScoreDetail(ent){
+  const a=DB.assess.find(x=>x.ent===ent);
+  if(!a)return;
+  openDrawer('考评明细 · '+a.ent,`
+    <div class="field"><div class="k">企业名称</div><div class="v">${a.ent}</div></div>
+    <div class="field"><div class="k">所在区域</div><div class="v">${a.dist||'松原市'}</div></div>
+    <div class="field"><div class="k">安全指数</div><div class="v mono t-accent">${a.safety}</div></div>
+    <div class="field"><div class="k">隐患整治</div><div class="v mono t-accent">${a.hidden}</div></div>
+    <div class="field"><div class="k">投诉处置</div><div class="v mono t-accent">${a.complaint}</div></div>
+    <div class="field"><div class="k">工作部署</div><div class="v mono t-accent">${a.deploy}</div></div>
+    <div class="field"><div class="k">综合总分</div><div class="v mono" style="font-size:18px;color:var(--accent3)">${a.total}</div></div>
+    <div class="field"><div class="k">考评等级</div><div class="v">${a.rank==='A'?'<span class="tag ok">A 级</span>':'<span class="tag warn">B 级</span>'}</div></div>
+    <div class="field"><div class="k">改进建议</div><div class="v t-sub fz12">${a.rank==='A'?'保持当前水平，持续提升安全指数与隐患整治效率':'需加强隐患整治与工作部署，提升综合得分'}</div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button><button class="btn primary" onclick="closeDrawer()">导出报告</button></div>`);
+}
+function exportReport(){openDrawer('下载导出',`<div class="field"><div class="k">导出内容</div><div class="v">企业考评综合报告（5家）</div></div><div class="field"><div class="k">格式</div><div class="v">PDF / Excel</div></div><div class="field"><div class="k">包含</div><div class="v t-sub fz12">打分表、雷达图、排名榜、维度对比、等级分布</div></div><div class="df"><button class="btn primary" onclick="closeDrawer()">生成报告</button></div>`);}
+function shareReport(){openDrawer('分享报告',`<div class="field"><div class="k">分享方式</div><div class="v">链接分享 / 二维码 / 邮件</div></div><div class="field"><div class="k">接收方</div><div class="v t-sub fz12">相关科室、燃气企业、上级主管部门</div></div><div class="field"><div class="k">有效期</div><div class="v">7 天</div></div><div class="df"><button class="btn primary" onclick="closeDrawer()">生成分享链接</button></div>`);}
+</script>
+</body>
+</html>

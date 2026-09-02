@@ -1,0 +1,400 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920,initial-scale=1"><title>泄漏研判 - 某某智慧燃气监管</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>
+/* 页面专属微调 */
+.mcard{display:flex;flex-direction:column;gap:8px;padding:14px 16px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);position:relative;overflow:hidden;cursor:pointer;transition:.2s}
+.mcard:hover{border-color:var(--accent);box-shadow:0 0 18px rgba(34,211,238,.2);transform:translateY(-2px)}
+.mcard .ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--accent);background:rgba(34,211,238,.1);border:1px solid var(--accent)}
+.mcard .ic svg{width:22px;height:22px}
+.mcard .nm{font-size:15px;font-weight:600;color:var(--text)}
+.mcard .rs{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--accent3);text-shadow:0 0 10px rgba(34,211,238,.4)}
+.mcard .ds{font-size:11px;color:var(--sub);line-height:1.6}
+.mcard .glow{position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.22),transparent 70%)}
+.mcard.trc .ic{color:var(--accent3)}
+.mcard.dif .ic{color:var(--warn);border-color:var(--warn);background:rgba(251,191,36,.1)}
+.mcard.dif .rs{color:var(--warn);text-shadow:0 0 10px rgba(251,191,36,.4)}
+.mcard.exp .ic{color:var(--danger);border-color:var(--danger);background:rgba(255,77,94,.1)}
+.mcard.exp .rs{color:var(--danger);text-shadow:0 0 10px rgba(255,77,94,.4)}
+.form-in{width:100%;background:rgba(8,17,38,.6);border:1px solid var(--line);color:var(--text);border-radius:var(--r-sm);padding:6px 8px;font-size:12px;font-family:var(--sans);outline:none}
+.form-in:focus{border-color:var(--accent)}
+.mapwrap{height:520px}
+.leak-pt,.valve-pt{cursor:pointer}
+/* 影响面积浮卡 */
+.area-stat{position:absolute;top:12px;left:12px;z-index:6;background:rgba(8,17,38,.88);border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(6px);padding:12px 14px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;min-width:380px}
+.area-stat .i{border-left:2px solid currentColor;padding-left:10px}
+.area-stat .l{font-size:11px;color:var(--sub);margin-bottom:4px}
+.area-stat .v{font-family:var(--mono);font-size:18px;font-weight:700}
+.area-stat .s{font-size:11px;color:var(--sub);margin-top:2px}
+.area-stat .d{color:var(--danger)}
+.area-stat .w{color:var(--warn)}
+.area-stat .b{color:var(--accent3)}
+/* 图例 */
+.leg-bot{position:absolute;bottom:14px;left:14px;z-index:6;background:rgba(8,17,38,.88);border:1px solid var(--line);border-radius:8px;backdrop-filter:blur(6px);padding:8px 12px;font-size:11px;color:var(--sub);display:flex;flex-direction:column;gap:6px}
+.leg-bot .row-d{display:flex;align-items:center;gap:8px}
+.leg-bot .dot{width:14px;height:14px;border-radius:50%;box-shadow:0 0 8px currentColor;flex:0 0 14px}
+.cmp{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r)}
+.cmp .nm{font-size:13px;color:var(--sub);flex:0 0 90px}
+.cmp .br{flex:1;height:10px;background:rgba(34,211,238,.08);border-radius:5px;overflow:hidden}
+.cmp .br i{display:block;height:100%;border-radius:5px}
+.cmp .vl{font-family:var(--mono);font-size:13px;color:var(--accent3);flex:0 0 80px;text-align:right}
+.tbl tbody tr{cursor:pointer}
+@keyframes mring{0%{r:3;opacity:.9}100%{r:14;opacity:0}}
+@keyframes mring2{0%{r:3;opacity:.9}50%{opacity:.5}100%{r:22;opacity:0}}
+.pulse-ring{animation:mring 2s ease-out infinite}
+.pulse-ring2{animation:mring2 2.6s ease-out infinite .6s}
+</style></head><body data-page="leak"><div class="bg-atmos"></div><header class="topbar"><span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span><div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div><div class="crumb">监管应用 / <b>泄漏研判</b></div><div class="sp"></div><div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div></header><aside class="sidenav" id="nav"></aside><main class="main">
+  <!-- ====== 顶部：3 研判模型卡片 ====== -->
+  <div class="grid g-3" style="margin-bottom:14px" id="modelCards"></div>
+  <!-- ====== 中部：GIS 研判图 + 参数面板 ====== -->
+  <div class="grid" style="grid-template-columns:1fr 360px;gap:14px;margin-bottom:14px">
+    <!-- 大图 -->
+    <div class="panel flex-1" data-r="80">
+      <div class="panel-h"><span class="t">泄漏研判 GIS 图</span><span class="more">泄漏源 GP-008 · 乾安县</span></div>
+      <div class="panel-b" style="padding:0;position:relative">
+        <div class="mapwrap" id="leakMap" style="position:relative">
+          <div id="leafMap" style="width:100%;height:100%"></div>
+          <!-- 影响面积浮卡 -->
+          <div class="area-stat" id="areaStat">
+            <div class="i d"><div class="l">爆炸破坏圈</div><div class="v" id="sExpR">32 m</div><div class="s">面积 <span id="sExpA" class="mono">3,217 m²</span> · 严重破坏</div></div>
+            <div class="i w"><div class="l">LFL 可燃下限圈</div><div class="v" id="sDifR">86 m</div><div class="s">面积 <span id="sDifA" class="mono">23,235 m²</span> · 爆炸危险</div></div>
+            <div class="i b"><div class="l">警戒疏散圈</div><div class="v" id="sWarnR">172 m</div><div class="s">面积 <span id="sWarnA" class="mono">92,941 m²</span> · 警戒范围</div></div>
+          </div>
+          <!-- 图层勾选控件 -->
+          <div id="layerCtrl" style="position:absolute;top:12px;right:12px;z-index:500"></div>
+          <!-- 底部图例 -->
+          <div class="leg-bot">
+            <div class="row-d"><span class="dot" style="color:#FF4D5E;background:rgba(255,77,94,.35)"></span>爆炸破坏圈（严重破坏）</div>
+            <div class="row-d"><span class="dot" style="color:#FBBF24;background:rgba(251,191,36,.35)"></span>LFL 可燃下限圈（遇火可爆）</div>
+            <div class="row-d"><span class="dot" style="color:#22D3EE;background:rgba(34,211,238,.35)"></span>警戒疏散圈（人员撤离）</div>
+            <div class="row-d"><span style="flex:0 0 14px;text-align:center;color:#FF4D5E;font-weight:700">★</span>泄漏源 GP-008（乾安县 K2+180）</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 右参数面板 -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="panel" data-r="140">
+        <div class="panel-h"><span class="t">研判参数</span><span class="more">可调</span></div>
+        <div class="panel-b">
+          <div class="row2 gap8">
+            <div class="field"><div class="k">风速（m/s）</div><input class="form-in" id="pWind" type="number" value="2.1" step="0.1" min="0"></div>
+            <div class="field"><div class="k">风向</div><select class="form-in" id="pDir"><option>东南风</option><option>西北风</option><option>东北风</option><option>西南风</option></select></div>
+          </div>
+          <div class="field"><div class="k">气温</div><div class="v mono">-8 ℃</div></div>
+          <div class="field"><div class="k">管径</div><div class="v mono">D219</div></div>
+          <div class="field"><div class="k">运行压力</div><div class="v mono">0.40 MPa</div></div>
+          <div class="field"><div class="k">泄漏速率（估算）</div><div class="v mono" id="pRate">2.8 m³/min</div></div>
+          <div class="field"><div class="k">燃气类型</div><div class="v">天然气（甲烷为主）</div></div>
+          <button class="btn primary" style="width:100%" id="btnReCalc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6 M3.5 9a9 9 0 0114.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0020.5 15"/></svg>重新研判计算</button>
+        </div>
+      </div>
+      <div class="panel flex-1" data-r="200">
+        <div class="panel-h"><span class="t">模型算法 · 研判结论</span></div>
+        <div class="panel-b">
+          <div class="fz12 t-sub fw6" style="margin-bottom:6px">模型算法说明</div>
+          <div class="fz12 t-sub" style="line-height:1.7;margin-bottom:10px">采用高斯烟羽扩散模型 + 爆炸冲击波超压预测模型，结合 GIS 拓扑与实时气象参数，对泄漏源、扩散影响范围、爆炸破坏半径进行三维仿真研判。</div>
+          <div class="fz12 t-sub fw6" style="margin-bottom:6px">研判结论与建议</div>
+          <div id="leakConclusion" style="font-size:13px;line-height:1.8"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ====== 底部：对比 + 历史 ====== -->
+  <div class="panel" data-r="240">
+    <div class="panel-h"><span class="t">三模型对比 · 研判历史</span></div>
+    <div class="panel-b">
+      <div id="modelCmp" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+      <div class="fz12 t-sub fw6" style="margin-bottom:6px">研判历史记录</div>
+      <table class="tbl"><thead><tr><th>研判编号</th><th>时间</th><th>关联警情</th><th>泄漏源</th><th>影响半径</th><th>破坏半径</th><th>研判人</th></tr></thead><tbody id="leakHist"></tbody></table>
+    </div>
+  </div>
+</main><script src="mock.js"></script><script src="shell.js"></script><script src="map.js"></script><script>
+// ====== 3 研判模型卡片 ======
+const models=[
+  {cls:'trc',ic:'M3 12c0-5 4-9 9-9 M12 3a9 9 0 019 9 M21 12l3 3 M3 12L0 9',nm:DB.leakModels[0].name,rs:DB.leakModels[0].result,ds:DB.leakModels[0].desc,detail:{algo:'基于SCADA压力/流量异常 drops + GIS 管网拓扑逆向追踪，定位泄漏源管段及具体桩号',input:'压力下降率 0.05MPa/min、流量偏差 +12%、管网拓扑 GP-008',output:'泄漏源：GP-008 K2+180 处（乾安县境内 D219 次高压钢管）',sug:'立即关闭 GP-008 上游 MS-06 乾安门站及下游分段阀门，抢修队赴现场'}},
+  {cls:'dif',ic:'M12 2a10 10 0 100 20 10 10 0 000-20z M12 6a6 6 0 100 12 M12 10a2 2 0 100 4',nm:DB.leakModels[1].name,rs:DB.leakModels[1].result,ds:DB.leakModels[1].desc,detail:{algo:'高斯烟羽扩散模型，输入风速/风向/气温/泄漏速率，计算可燃气体浓度场分布',input:'风速 2.1m/s 东南风、气温 -8℃、泄漏速率 2.8m³/min、天然气',output:'爆炸下限 5% 影响半径 86m，警戒半径 172m',sug:'疏散影响半径 86m 范围内人员，设置 172m 警戒区'}},
+  {cls:'exp',ic:'M13 2L3 14h7l-1 8 10-12h-7l1-8z',nm:DB.leakModels[2].name,rs:DB.leakModels[2].result,ds:DB.leakModels[2].desc,detail:{algo:'TNT当量法 + 冲击波超压预测模型，估算燃气云团爆炸的破坏半径',input:'泄漏量 16.8m³、封闭空间、点火概率',output:'严重破坏半径 32m，轻伤半径 78m',sug:'32m 范围内为高风险区，禁止明火，启动防爆措施'}},
+];
+document.getElementById('modelCards').innerHTML=models.map((m,i)=>`<div class="mcard ${m.cls}" data-r="${i*60}" data-i="${i}">
+  <div class="glow"></div><div class="ic">${svgIcon(m.ic,22)}</div><div class="nm">${m.nm}</div>
+  <div class="rs">${m.rs}</div><div class="ds">${m.ds}</div>
+  <div class="fz12 t-sub" style="margin-top:auto">点击查看模型详情 →</div></div>`).join('');
+document.querySelectorAll('.mcard').forEach(c=>c.onclick=()=>openModelDetail(+c.dataset.i));
+
+function openModelDetail(i){
+  const m=models[i];
+  openDrawer('研判模型 · '+m.nm,`
+    <div class="field"><div class="k">模型结果</div><div class="v mono t-accent">${m.rs}</div></div>
+    <div class="field"><div class="k">模型说明</div><div class="v">${m.ds}</div></div>
+    <div class="field"><div class="k">算法原理</div><div class="v">${m.detail.algo}</div></div>
+    <div class="field"><div class="k">输入参数</div><div class="v">${m.detail.input}</div></div>
+    <div class="field"><div class="k">输出结果</div><div class="v">${m.detail.output}</div></div>
+    <div class="field"><div class="k">处置建议</div><div class="v t-warn">${m.detail.sug}</div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+// ====== GIS 研判图（Leaflet 真实地图 + 污染热力圈 + 高斯烟羽）======
+// 泄漏源：乾安县 GP-008（从 DB.stations 中找到最匹配的乾安县站点作为基准点）
+let LEAK_CENTER=null;
+(function(){
+  // 优先找乾安县境内的站点作为基准
+  const qianan=DB.stations.find(s=>s.dist.includes('乾安'))||DB.stations[4];
+  LEAK_CENTER=[qianan.lat+0.002, qianan.lng-0.004]; // 微偏模拟 GP-008 桩号
+})();
+// 风向 → 方位角（0°=北，90°=东，180°=南，270°=西），烟羽扩散方向与风向相反（气体被吹向风向的下风向）
+const DIR_ANGLE={'北风':180,'南风':0,'东风':270,'西风':90,
+  '东北风':225,'西北风':135,'东南风':315,'西南风':45};
+let curWind=2.1,curDir='东南风';
+let _leakMapIns=null;
+// 研判图层组（重算时清空重绘）
+let LEAK_LAYER=null;
+const R1_M=32, R2_M=86, R3_M=172; // 爆炸 / LFL / 警戒（米）
+
+// 米到 Leaflet 纬度（近似：松原 ~45°N，1°lat≈111320m，1°lng≈78900m）
+function mToLat(m){return m/111320}
+function mToLng(m,lat){return m/(111320*Math.cos(lat*Math.PI/180))}
+// 圆面积
+function area(r){return Math.round(Math.PI*r*r)}
+function fmtArea(m2){if(m2>=1000000)return (m2/1000000).toFixed(2)+' km²';return m2.toLocaleString()+' m²'}
+
+function initLeakLayers(){
+  if(!_leakMapIns){setTimeout(initLeakLayers,200);return}
+  const map=_leakMapIns.map;
+  if(LEAK_LAYER)map.removeLayer(LEAK_LAYER);
+  LEAK_LAYER=L.layerGroup().addTo(map);
+
+  const sc=curWind/2.1;
+  const r1=R1_M*sc, r2=R2_M*sc, r3=R3_M*sc;
+  const lat=LEAK_CENTER[0], lng=LEAK_CENTER[1];
+
+  // —— 1) 警戒疏散圈（青，最大）——
+  drawHeatCircle(map, LEAK_LAYER, lat, lng, r3,
+    {outerColor:'rgba(34,211,238,0)',innerColor:'rgba(34,211,238,0.18)',
+     strokeColor:'#22D3EE',strokeDash:'8 6',label:`警戒 ${r3.toFixed(0)}m`,labelColor:'#22D3EE',labelOff:'NE'});
+
+  // —— 2) LFL 可燃下限圈（黄）——
+  drawHeatCircle(map, LEAK_LAYER, lat, lng, r2,
+    {outerColor:'rgba(251,191,36,0)',innerColor:'rgba(251,191,36,0.28)',
+     strokeColor:'#FBBF24',strokeDash:'5 4',label:`LFL ${r2.toFixed(0)}m`,labelColor:'#FBBF24',labelOff:'SE'});
+
+  // —— 3) 爆炸破坏圈（红）——
+  drawHeatCircle(map, LEAK_LAYER, lat, lng, r1,
+    {outerColor:'rgba(255,77,94,0)',innerColor:'rgba(255,77,94,0.45)',
+     strokeColor:'#FF4D5E',strokeDash:'3 3',label:`破坏 ${r1.toFixed(0)}m`,labelColor:'#FF4D5E',labelOff:'SW'});
+
+  // —— 4) 高斯烟羽（下风向椭圆浓度场）——
+  drawGaussianPlume(map, LEAK_LAYER, lat, lng,
+    {windDir:curDir, windSpeed:curWind, R_LFL:r2, R_WARN:r3});
+
+  // —— 5) 泄漏源脉冲标记 ——
+  const leakIcon=L.divIcon({className:'',
+    html:`<div style="position:relative;transform:translate(-50%,-50%);width:64px;height:64px">
+      <span style="position:absolute;inset:0;border-radius:50%;border:3px solid #FF4D5E;animation:gas-alarm-ripple 1.8s ease-out infinite;opacity:.7"></span>
+      <span style="position:absolute;inset:14px;border-radius:50%;border:2px solid #FBBF24;animation:gas-alarm-ripple 2.4s ease-out infinite .6s;opacity:.6"></span>
+      <span style="position:absolute;inset:24px;border-radius:50%;background:radial-gradient(circle,#FF4D5E,#7C3AED);box-shadow:0 0 18px #FF4D5E,0 0 30px rgba(251,191,36,.5)"></span>
+      <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:18px;font-weight:800;color:#fff;text-shadow:0 0 8px #000">!</span>
+    </div>`,iconSize:[0,0]});
+  L.marker(LEAK_CENTER,{icon:leakIcon,zIndexOffset:2000})
+    .bindTooltip(`<b style="color:#FF4D5E;font-size:13px">⚠ 泄漏源 GP-008 · K2+180</b><br>
+      管段：乾安县 D219 次高压钢管<br>
+      压力：0.40 MPa<br>
+      泄漏速率：${(2.8*sc).toFixed(2)} m³/min<br>
+      爆炸半径：${r1.toFixed(0)}m / LFL：${r2.toFixed(0)}m / 警戒：${r3.toFixed(0)}m`,{sticky:true,direction:'top',offset:[0,-30]})
+    .on('click',()=>openDrawer('泄漏源点位详情',`
+      <div class="field"><div class="k">关联管段</div><div class="v mono">GP-008（乾安县 D219 次高压钢管）</div></div>
+      <div class="field"><div class="k">泄漏位置</div><div class="v mono">K2+180 处</div></div>
+      <div class="field"><div class="k">运行压力</div><div class="v mono">0.40 MPa</div></div>
+      <div class="field"><div class="k">泄漏速率</div><div class="v mono t-danger">${(2.8*sc).toFixed(2)} m³/min</div></div>
+      <div class="field"><div class="k">爆炸破坏半径</div><div class="v mono t-danger">${r1.toFixed(0)} m · ${fmtArea(area(r1))}</div></div>
+      <div class="field"><div class="k">LFL 可燃下限半径</div><div class="v mono t-warn">${r2.toFixed(0)} m · ${fmtArea(area(r2))}</div></div>
+      <div class="field"><div class="k">警戒疏散半径</div><div class="v mono t-accent">${r3.toFixed(0)} m · ${fmtArea(area(r3))}</div></div>
+      <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button><button class="btn primary" onclick="closeDrawer();alert('已下发关阀+应急抢修指令')">启动应急处置</button></div>`))
+    .addTo(LEAK_LAYER);
+
+  // —— 6) 周边阀门（乾安门站、让字堡、分段阀）——
+  const valves=[
+    {n:'乾安门站阀',off:[-0.003,+0.008],stat:'可远程控制'},
+    {n:'让字堡阀',  off:[+0.004,-0.009],stat:'可远程控制'},
+    {n:'GP-008分段阀',off:[+0.002,-0.002],stat:'现场操作'},
+  ];
+  valves.forEach(v=>{
+    const p=[lat+v.off[0], lng+v.off[1]];
+    const vIcon=L.divIcon({className:'',
+      html:`<div style="position:relative;transform:translate(-50%,-50%)">
+        <div style="width:22px;height:22px;background:rgba(34,211,238,.2);border-radius:50%;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)"></div>
+        <div style="width:12px;height:12px;background:#22D3EE;transform:translate(-50%,-50%) rotate(45deg);position:absolute;left:50%;top:50%;box-shadow:0 0 10px #22D3EE"></div>
+        <div style="color:#22D3EE;font-size:11px;font-weight:600;white-space:nowrap;margin-left:14px;margin-top:-30px;text-shadow:0 0 5px #000">${v.n}</div>
+      </div>`,iconSize:[0,0]});
+    L.marker(p,{icon:vIcon})
+      .bindTooltip(`<b style="color:#22D3EE">${v.n}</b><br>状态：<span class="tag ok">${v.stat}</span>`)
+      .on('click',()=>openDrawer('应急阀门详情',`
+        <div class="field"><div class="k">阀门名称</div><div class="v">${v.n}</div></div>
+        <div class="field"><div class="k">距离泄漏源</div><div class="v mono">${Math.round(Math.sqrt(v.off[0]*v.off[0]+v.off[1]*v.off[1])*111320)} m</div></div>
+        <div class="field"><div class="k">控制状态</div><div class="v"><span class="tag ok">${v.stat}</span></div></div>
+        <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button>${v.stat.includes('远程')?`<button class="btn primary" onclick="closeDrawer();alert('已下发关阀指令 · ${v.n}')">远程关阀</button>`:''}</div>`))
+      .addTo(LEAK_LAYER);
+  });
+
+  // 自动聚焦泄漏点，放大到 zoom 17 看清影响范围
+  map.setView([lat, lng], 17, {animate:true});
+}
+
+// ---------- 污染热力圆（SVG radial gradient + Canvas fallback）----------
+function drawHeatCircle(map, grp, lat, lng, rMeters, opt){
+  const rLat=mToLat(rMeters);
+  const rLng=mToLng(rMeters,lat);
+  // 外层：SVG 发光径向渐变 + 虚线描边
+  const pane=map.createPane('heat'+Math.floor(Math.random()*1e9));
+  pane.style.pointerEvents='none';pane.style.zIndex=400;
+  const svgNS='http://www.w3.org/2000/svg';
+  const ov=L.svgOverlay(
+    (function(){
+      const el=L.polygon([[lat-rLat,lng],[lat,lng-rLng],[lat+rLat,lng],[lat,lng+rLng]]).getBounds();
+      return el;
+    })(),{bounds:null,pane:pane});
+  // 使用 L.circle + SVG 注入更方便
+  const fill=L.circle([lat,lng],{radius:rMeters,color:opt.strokeColor,weight:1.5,
+    opacity:0.9,dashArray:opt.strokeDash,fillColor:opt.strokeColor,fillOpacity:0.06,interactive:false,pane:pane});
+  fill.addTo(grp);
+  // 内圈 5 层同心圆叠加模拟热力（纯矢量不依赖 canvas）
+  for(let k=0;k<5;k++){
+    const rat=1-k*0.18; // 半径比率
+    const op=opt.innerColor.match(/[\d.]+\)/)[0].slice(0,-1)*(0.35+k*0.14);
+    const fracMatch=opt.innerColor.match(/,(0\.[\d]+)\)/);
+    const baseOp=fracMatch?parseFloat(fracMatch[1]):0.3;
+    const op2=(baseOp*(0.25+k*0.17)).toFixed(3);
+    L.circle([lat,lng],{radius:rMeters*rat,color:opt.strokeColor,weight:0,
+      fillColor:opt.strokeColor,fillOpacity:op2,interactive:false,pane:pane}).addTo(grp);
+  }
+  // 半径文字注记
+  const labelPos=[lat-mToLat(rMeters*0.15),lng+mToLng(rMeters*0.9,lat)];
+  L.marker(labelPos,{interactive:false,pane:pane,
+    icon:L.divIcon({className:'',
+      html:`<div style="transform:translate(-50%,-50%);color:${opt.labelColor};font-size:12px;font-weight:700;
+        background:rgba(8,17,38,.7);padding:3px 8px;border:1px solid ${opt.labelColor};border-radius:4px;
+        white-space:nowrap;text-shadow:0 0 4px #000;box-shadow:0 0 10px ${opt.labelColor}55">${opt.label}</div>`,iconSize:[0,0]})
+  }).addTo(grp);
+}
+
+// ---------- 高斯烟羽椭圆（下风向浓度带）----------
+function drawGaussianPlume(map, grp, lat, lng, cfg){
+  const ang=DIR_ANGLE[cfg.windDir]??315; // 东南风默认
+  const rad=ang*Math.PI/180;
+  // 烟羽长度 = LFL 半径 ×3（下风向拖尾），宽度 = LFL ×1.2（横风向 2σ）
+  const a=cfg.R_WARN*1.5; // 长半轴（沿风向）
+  const b=cfg.R_LFL*0.7;   // 短半轴（横风向）
+  // 生成椭圆 latlng 点：绕中心旋转 ang°
+  const steps=64;
+  const pts=[];
+  for(let i=0;i<steps;i++){
+    const t=(i/steps)*Math.PI*2;
+    let x=a*Math.cos(t), y=b*Math.sin(t);
+    // 旋转
+    const x2= x*Math.cos(rad) + y*Math.sin(rad);
+    const y2=-x*Math.sin(rad) + y*Math.cos(rad);
+    // 转为 lat/lng（注意 x 是经度，y 是纬度）
+    const lat2=lat + mToLat(y2);
+    const lng2=lng + mToLng(x2,lat);
+    pts.push([lat2,lng2]);
+  }
+  const pane=map.createPane('plume'+Math.floor(Math.random()*1e9));
+  pane.style.pointerEvents='none';pane.style.zIndex=410;
+  // 外层浓度场（3 层不同透明度的椭圆叠加）
+  const layers=[
+    {rat:1, fill:'rgba(34,211,238,0.05)', stroke:'rgba(34,211,238,0.15)', dash:'6 5'},
+    {rat:0.7, fill:'rgba(251,191,36,0.10)', stroke:'rgba(251,191,36,0.25)', dash:'4 3'},
+    {rat:0.42, fill:'rgba(255,77,94,0.16)', stroke:'rgba(255,77,94,0.35)', dash:'3 2'},
+  ];
+  layers.forEach((ly,idx)=>{
+    const sub=pts.map(([la,ln])=>{
+      const dy=(la-lat)*ly.rat, dx=(ln-lng)*ly.rat;
+      return [lat+dy, lng+dx];
+    });
+    L.polygon(sub,{color:ly.stroke,weight:1,dashArray:ly.dash,fillColor:'rgba(0,0,0,0)',fillOpacity:0,interactive:false,pane:pane}).addTo(grp);
+    // 再加一个 L.polyline 走边缘（模拟等浓度线），加 fill
+    L.polygon(sub,{stroke:false,fillColor:(idx===2?'#FF4D5E':idx===1?'#FBBF24':'#22D3EE'),fillOpacity:ly.fill.match(/([\d.]+)\)/)[1]*1,interactive:false,pane:pane}).addTo(grp);
+  });
+  // 风向箭头（下风向）
+  const arrowLen=cfg.R_WARN*0.9;
+  const endX=Math.cos(rad)*arrowLen, endY=-Math.sin(rad)*arrowLen;
+  const endP=[lat + mToLat(endY), lng + mToLng(endX,lat)];
+  // 风向文字
+  const midP=[(lat+endP[0])/2+0.0012, (lng+endP[1])/2];
+  L.polyline([[lat,lng],endP],{color:'rgba(34,211,238,0.55)',weight:2,dashArray:'10 5',
+    interactive:false,pane:pane}).addTo(grp);
+  L.marker(midP,{interactive:false,pane:pane,
+    icon:L.divIcon({className:'',
+      html:`<div style="transform:translate(-50%,-50%);color:#22D3EE;font-size:12px;font-weight:600;
+        background:rgba(8,17,38,.7);padding:3px 8px;border:1px solid #22D3EE;border-radius:4px;
+        white-space:nowrap;text-shadow:0 0 4px #000">${cfg.windDir} ${cfg.windSpeed}m/s →</div>`,iconSize:[0,0]})
+  }).addTo(grp);
+}
+
+// ====== 影响面积浮卡更新 ======
+function updateAreaStat(){
+  const sc=curWind/2.1;
+  const r1=R1_M*sc, r2=R2_M*sc, r3=R3_M*sc;
+  document.getElementById('sExpR').textContent=Math.round(r1)+' m';
+  document.getElementById('sDifR').textContent=Math.round(r2)+' m';
+  document.getElementById('sWarnR').textContent=Math.round(r3)+' m';
+  document.getElementById('sExpA').textContent=fmtArea(area(r1));
+  document.getElementById('sDifA').textContent=fmtArea(area(r2));
+  document.getElementById('sWarnA').textContent=fmtArea(area(r3));
+}
+
+// ====== 重新研判计算 ======
+function reCalc(){
+  curWind=parseFloat(document.getElementById('pWind').value)||2.1;
+  curDir=document.getElementById('pDir').value;
+  const sc=curWind/2.1;
+  const rDif=Math.round(R2_M*sc),rExp=Math.round(R1_M*sc),rWarn=Math.round(R3_M*sc);
+  document.getElementById('pRate').textContent=(2.8*sc).toFixed(2)+' m³/min';
+  updateAreaStat();
+  initLeakLayers();
+  document.getElementById('leakConclusion').innerHTML=`
+    <div style="margin-bottom:8px">当前研判结论（风速 ${curWind}m/s · ${curDir}）：</div>
+    <div style="margin-bottom:6px">① 泄漏源：<span class="mono t-accent">GP-008 K2+180 处</span>（乾安县 D219 次高压钢管）</div>
+    <div style="margin-bottom:6px">② 爆炸破坏半径：<span class="mono t-danger">${rExp} m</span> / 破坏面积 <span class="mono t-danger">${fmtArea(area(rExp))}</span>，高风险警戒</div>
+    <div style="margin-bottom:6px">③ LFL 可燃下限：<span class="mono t-warn">${rDif} m</span> / 覆盖 <span class="mono t-warn">${fmtArea(area(rDif))}</span>，遇明火可爆炸</div>
+    <div style="margin-bottom:6px">④ 警戒疏散半径：<span class="mono t-accent">${rWarn} m</span> / 覆盖 <span class="mono t-accent">${fmtArea(area(rWarn))}</span>，需人员撤离</div>
+    <div class="t-warn fw6" style="margin-top:8px">建议：立即关闭上下游阀门，疏散 ${rWarn}m 内人员，${rExp}m 内设置警戒禁火区，启动应急抢修。</div>`;
+}
+document.getElementById('btnReCalc').onclick=reCalc;
+
+// ====== 三模型对比 ======
+document.getElementById('modelCmp').innerHTML=[
+  {nm:'泄漏溯源',v:1,c:'#22D3EE',lab:'管段定位',pct:100},
+  {nm:'扩散影响',v:86,c:'#FBBF24',lab:'86m',pct:86},
+  {nm:'爆炸破坏',v:32,c:'#FF4D5E',lab:'32m',pct:32},
+].map(m=>`<div class="cmp"><span class="nm">${m.nm}</span>
+  <div class="br"><i style="width:${m.pct}%;background:linear-gradient(90deg,${m.c},${m.c}88);box-shadow:0 0 8px ${m.c}"></i></div>
+  <span class="vl">${m.lab}</span></div>`).join('');
+
+// ====== 研判历史记录（来源 DB.alarms 红橙级别已闭环/已恢复） ======
+const hist=DB.alarms.filter(a=>(a.lvl==='红'||a.lvl==='橙')&&(a.status==='已闭环'||a.status==='已恢复'));
+const leakExperts=DB.emergency.experts;
+document.getElementById('leakHist').innerHTML=hist.map((a,i)=>`<tr>
+  <td class="mono t-accent">L-26${(800+i).toString().padStart(4,'0')}</td>
+  <td class="mono">${a.time}</td>
+  <td>${a.id}</td>
+  <td>${a.loc} ${lvlTag(a.lvl)}</td>
+  <td class="mono t-warn">${60+i*8} m</td>
+  <td class="mono t-danger">${24+i*4} m</td>
+  <td>${leakExperts[i%leakExperts.length].n}</td></tr>`).join('');
+
+reCalc();
+
+// ====== 真实地图（Leaflet + 图层勾选 + 污染热力研判图层） ======
+(function initRealMap(){
+  function go(){
+    if(typeof L==='undefined'){return setTimeout(go,250)}
+    if(typeof initGasMap==='undefined'){return setTimeout(go,250)}
+    const el=document.getElementById('leafMap');if(!el)return;
+    const gm=initGasMap('leafMap',{theme:'emergency',showLayers:{pipe:false,station:false,alarm:false,hazard:false,protect:false}});
+    if(!gm){return setTimeout(go,300)}
+    _leakMapIns=gm;
+    gm.renderLayerCtrl('layerCtrl');
+    setTimeout(()=>gm.map.invalidateSize(),200);
+    setTimeout(()=>{gm.map.invalidateSize();updateAreaStat();initLeakLayers()},500);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+})();
+</script></body></html>

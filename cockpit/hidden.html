@@ -1,0 +1,215 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920,initial-scale=1"><title>隐患管理 - 某某智慧燃气监管</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>
+/* 页面专属微调 */
+.sel{background:rgba(8,17,38,.6);border:1px solid var(--line);color:var(--sub);border-radius:var(--r-sm);padding:5px 8px;font-size:12px;font-family:var(--sans);cursor:pointer;outline:none;transition:.2s}
+.sel:hover,.sel:focus{border-color:var(--accent);color:var(--accent3)}
+.sel option{background:#0A1530;color:var(--text)}
+.tbl tbody tr{cursor:pointer}
+/* 流程步骤 */
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.flow .step{flex:1;min-width:150px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);position:relative}
+.flow .step .ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent);background:rgba(34,211,238,.1);border:1px solid var(--accent)}
+.flow .step .ic svg{width:18px;height:18px}
+.flow .step .st{font-size:13px;font-weight:600;color:var(--text)}
+.flow .step .ds{font-size:11px;color:var(--sub);text-align:center;line-height:1.5}
+.flow .arr{flex:0 0 28px;display:flex;align-items:center;justify-content:center;color:var(--accent)}
+.flow .arr svg{width:20px;height:20px}
+/* 时间轴 */
+.tl{position:relative;padding-left:18px}
+.tl::before{content:"";position:absolute;left:5px;top:4px;bottom:4px;width:2px;background:linear-gradient(180deg,var(--accent),var(--accent2));opacity:.5}
+.tl .nd{position:relative;padding:0 0 12px 6px}
+.tl .nd::before{content:"";position:absolute;left:-17px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.tl .nd.done::before{background:var(--success);box-shadow:0 0 8px var(--success)}
+.tl .nd .tt{font-size:12px;color:var(--accent3);font-family:var(--mono)}
+.tl .nd .ct{font-size:13px;color:var(--text);margin-top:2px}
+.tl .nd .ds{font-size:11px;color:var(--sub);margin-top:2px}
+.form-in{width:100%;background:rgba(8,17,38,.6);border:1px solid var(--line);color:var(--text);border-radius:var(--r-sm);padding:6px 8px;font-size:12px;font-family:var(--sans);outline:none}
+.form-in:focus{border-color:var(--accent)}
+.mapwrap{height:280px}
+.h-pt{cursor:pointer}
+@keyframes mring{0%{r:3;opacity:.9}100%{r:14;opacity:0}}
+@keyframes mring2{0%{r:3;opacity:.9}50%{opacity:.5}100%{r:22;opacity:0}}
+.pulse-ring{animation:mring 2s ease-out infinite}
+.pulse-ring2{animation:mring2 2.6s ease-out infinite .6s}
+</style></head><body data-page="hidden"><div class="bg-atmos"></div><header class="topbar"><span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span><div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div><div class="crumb">监管应用 / <b>隐患管理</b></div><div class="sp"></div><div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div></header><aside class="sidenav" id="nav"></aside><main class="main">
+  <!-- ====== 顶部 KPI ====== -->
+  <div class="grid g-4" style="margin-bottom:14px">
+    <div class="kpi" data-r="0" id="kpiTotal"><div class="glow"></div></div>
+    <div class="kpi" data-r="60" id="kpiDoing"><div class="glow"></div></div>
+    <div class="kpi" data-r="120" id="kpiWait"><div class="glow"></div></div>
+    <div class="kpi" data-r="180" id="kpiDone"><div class="glow"></div></div>
+  </div>
+  <!-- ====== 中部：台账 + 图表/地图 ====== -->
+  <div class="grid" style="grid-template-columns:1.65fr 1fr;gap:14px;margin-bottom:14px">
+    <!-- 左：台账表 -->
+    <div class="panel flex-1" data-r="80">
+      <div class="panel-h"><span class="t">隐患台账</span><span class="more" id="hCount">共 10 条</span></div>
+      <div class="panel-b">
+        <div class="toolbar" id="hToolbar">
+          <select class="sel" id="fLvl"><option value="">全部等级</option><option>红</option><option>橙</option><option>黄</option><option>蓝</option></select>
+          <select class="sel" id="fType"></select>
+          <select class="sel" id="fStat"><option value="">全部状态</option><option>整改中</option><option>待验收</option><option>待审核</option><option>已整改</option></select>
+          <select class="sel" id="fDist"></select>
+          <div class="sp"></div>
+          <button class="btn primary" id="btnNewHidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>新增隐患</button>
+        </div>
+        <table class="tbl" id="hTbl">
+          <thead><tr><th>隐患ID</th><th>类型</th><th>等级</th><th>位置</th><th>责任单位</th><th>状态</th><th>整改期限</th></tr></thead>
+          <tbody id="hBody"></tbody>
+        </table>
+        <div class="pager" id="hPager"></div>
+      </div>
+    </div>
+    <!-- 右列 -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <!-- 分级/类型/完成率 -->
+      <div class="panel" data-r="140">
+        <div class="panel-h"><span class="t">分级统计 · 类型分布</span><span class="more">实时</span></div>
+        <div class="panel-b">
+          <div style="display:flex;gap:14px;align-items:center">
+            <div class="donut" style="width:110px;height:110px;flex:0 0 110px">
+              <canvas id="hDonut" style="width:110px;height:110px"></canvas>
+              <div class="cap"><div class="v" id="hDonutV">10</div><div class="l">分级(项)</div></div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:5px" id="hLegend"></div>
+          </div>
+          <div class="mt12"><div class="fz12 t-sub" style="margin-bottom:4px">类型分布</div><canvas id="hBar" style="width:100%;height:84px"></canvas></div>
+          <div class="mt8" id="hRate"></div>
+        </div>
+      </div>
+      <!-- 一张图 -->
+      <div class="panel flex-1" data-r="200">
+        <div class="panel-h"><span class="t">隐患一张图</span><span class="more">点击点位查看详情</span></div>
+        <div class="panel-b" style="padding:8px">
+          <div class="mapwrap" id="hMap">
+            <div id="leafMap" style="width:100%;height:100%;position:absolute;inset:0;z-index:1"></div>
+            <div id="layerCtrl" style="position:absolute;top:12px;right:12px;z-index:500;background:rgba(8,17,38,.85);border:1px solid #1F3A6A;border-radius:8px;padding:10px 12px;font-size:12px;color:#CAD7F0;backdrop-filter:blur(6px);min-width:150px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ====== 底部：整改流程 ====== -->
+  <div class="panel" data-r="240">
+    <div class="panel-h"><span class="t">隐患整改闭环流程</span><span class="more">台账 → 审核 → 整改 → 跟踪 → 验收</span></div>
+    <div class="panel-b" id="hFlow"></div>
+  </div>
+</main><script src="mock.js"></script><script src="shell.js"></script><script src="map.js"></script><script>
+// ====== KPI 聚合（按 DB.hidden 状态比例放大到平台总数 43） ======
+const HTOTAL=DB.kpi.hidden.val;
+const hCnt={整改中:0,待验收审核:0,已整改:0};
+DB.hidden.forEach(h=>{if(h.status==='整改中')hCnt.整改中++;else if(h.status==='待验收'||h.status==='待审核')hCnt.待验收审核++;else if(h.status==='已整改')hCnt.已整改++});
+const hSum=hCnt.整改中+hCnt.待验收审核+hCnt.已整改;
+const HK={整改中:Math.round(HTOTAL*hCnt.整改中/hSum),待验收审核:Math.round(HTOTAL*hCnt.待验收审核/hSum)};
+HK.已整改=HTOTAL-HK.整改中-HK.待验收审核;
+const hRatePct=(HK.已整改+HK.待验收审核)/HTOTAL*100;
+const kpiTpl=(lab,val,u,ic,trend,cls)=>`<div class="glow"></div><div class="lab">${svgIcon(ic,14)} ${lab}</div><div class="val">${fmt(val)}<span class="u">${u}</span></div><div class="trend ${cls}">${trend}</div>`;
+document.getElementById('kpiTotal').innerHTML=kpiTpl('隐患总数',HTOTAL,'项','M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z M8 12h8','▼ 8% 同比','down');
+document.getElementById('kpiDoing').innerHTML=kpiTpl('整改中',HK.整改中,'项','M12 6v6l4 2 M12 2a10 10 0 100 20 10 10 0 000-20z','▲ 待整改','warn');
+document.getElementById('kpiWait').innerHTML=kpiTpl('待验收审核',HK.待验收审核,'项','M9 11l3 3L22 4 M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11','待验收','flat');
+document.getElementById('kpiDone').innerHTML=kpiTpl('已整改',HK.已整改,'项','M20 6L9 17l-5-5','▲ 已闭环','up');
+
+// ====== 分级环形 + 类型柱状 + 完成率 ======
+const lvlColor={红:'#FF4D5E',橙:'#FB923C',黄:'#FBBF24',蓝:'#22D3EE'};
+const lvlCnt={红:0,橙:0,黄:0,蓝:0};
+DB.hidden.forEach(h=>lvlCnt[h.lvl]++);
+donut(document.getElementById('hDonut'),Object.entries(lvlCnt).map(([k,v])=>({v,color:lvlColor[k]})));
+document.getElementById('hDonutV').textContent=DB.hidden.length;
+document.getElementById('hLegend').innerHTML=Object.entries(lvlCnt).map(([k,v])=>`
+  <div class="flex aic jcb"><span class="lvl ${LVLCLS[k]}"><i></i>${k}色</span><span class="mono t-accent">${v} 项</span></div>`).join('');
+// 类型分布
+const hByType={};
+DB.hidden.forEach(h=>hByType[h.type]=(hByType[h.type]||0)+1);
+const tEntries=Object.entries(hByType);
+const tLabels=tEntries.map(([t])=>t.length>4?t.slice(0,3):t);
+barChart(document.getElementById('hBar'),tEntries.map(e=>e[1]),tLabels,{color:'#22D3EE'});
+// 完成率
+document.getElementById('hRate').innerHTML=`
+  <div class="flex jcb fz12" style="margin-bottom:4px"><span class="t-sub">整改完成率（含待验收）</span><span class="mono t-accent">${hRatePct.toFixed(1)}%</span></div>
+  <div class="bar"><i style="width:${hRatePct}%"></i></div>`;
+
+// ====== 台账表 + 筛选 + 分页 ======
+let hCur=1;const hPS=6;
+const allTypes=[...new Set(DB.hidden.map(h=>h.type))];
+const allDist=[...new Set(DB.hidden.map(h=>{const m=h.loc.match(/(宁江区|前郭县|长岭县|乾安县|扶余市)/);return m?m[1]:'其他'}))];
+document.getElementById('fType').innerHTML='<option value="">全部类型</option>'+allTypes.map(t=>`<option>${t}</option>`).join('');
+document.getElementById('fDist').innerHTML='<option value="">全部区县</option>'+allDist.map(t=>`<option>${t}</option>`).join('');
+
+function hFiltered(){return DB.hidden.filter(h=>{
+  const l=document.getElementById('fLvl').value,t=document.getElementById('fType').value,s=document.getElementById('fStat').value,d=document.getElementById('fDist').value;
+  if(l&&h.lvl!==l)return false;if(t&&h.type!==t)return false;if(s&&h.status!==s)return false;
+  if(d&&!h.loc.includes(d))return false;return true;});}
+function renderHTbl(){const f=hFiltered();const tp=Math.ceil(f.length/hPS)||1;if(hCur>tp)hCur=tp;const s=(hCur-1)*hPS,rows=f.slice(s,s+hPS);
+  document.getElementById('hCount').textContent='共 '+f.length+' 条';
+  document.getElementById('hBody').innerHTML=rows.length?rows.map(h=>`<tr data-id="${h.id}">
+    <td class="mono t-accent">${h.id}</td><td>${h.type}</td><td>${lvlTag(h.lvl)}</td><td class="t-sub">${h.loc}</td><td>${h.resp}</td>
+    <td>${tag(h.status,h.lvl)}</td><td class="mono">${h.due}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">无符合条件的隐患</td></tr>';
+  // pager
+  let pg='';for(let i=1;i<=tp;i++)pg+=`<button class="${i===hCur?'on':''}" onclick="hCur=${i};renderHTbl()">${i}</button>`;
+  document.getElementById('hPager').innerHTML=`<span>第 ${hCur}/${tp||1} 页 · 共 ${f.length} 条</span>${pg}`;
+  // row click
+  document.querySelectorAll('#hBody tr[data-id]').forEach(tr=>tr.onclick=()=>openHiddenDetail(tr.dataset.id));}
+document.getElementById('fLvl').onchange=document.getElementById('fType').onchange=document.getElementById('fStat').onchange=document.getElementById('fDist').onchange=()=>{hCur=1;renderHTbl()};
+
+// ====== 整改闭环详情抽屉（时间轴） ======
+function openHiddenDetail(id){
+  const h=DB.hidden.find(x=>x.id===id);if(!h)return;
+  const steps=[
+    {t:'2026-08-28 09:15',c:'隐患上报登记',d:'巡查员发现并上报 · '+h.type,s:h.status!=='待审核'},
+    {t:'2026-08-28 14:20',c:'审核推送',d:'住建局审核通过 · 推送 '+h.resp+' 限期整改',s:['整改中','待验收','已整改'].includes(h.status)},
+    {t:'2026-09-01 10:30',c:'整改反馈',d:h.status==='已整改'||h.status==='待验收'?'责任单位已完成整改并提交反馈':'责任单位整改进行中',s:['待验收','已整改'].includes(h.status)},
+    {t:h.due+' 12:00',c:'跟踪督查',d:'监管人员现场跟踪复核整改情况',s:h.status==='待验收'||h.status==='已整改'},
+    {t:'--',c:'验收销号',d:h.status==='已整改'?'已验收销号闭环':'待整改完成后验收',s:h.status==='已整改'},
+  ];
+  const tl=steps.map(s=>`<div class="nd ${s.s?'done':''}"><div class="tt">${s.t}</div><div class="ct">${s.c}</div><div class="ds">${s.d}</div></div>`).join('');
+  openDrawer('隐患详情 · '+h.id,`
+    <div class="field"><div class="k">隐患类型</div><div class="v">${h.type} ${lvlTag(h.lvl)}</div></div>
+    <div class="field"><div class="k">隐患位置</div><div class="v">${h.loc}</div></div>
+    <div class="field"><div class="k">责任单位</div><div class="v">${h.resp}</div></div>
+    <div class="field"><div class="k">当前状态</div><div class="v">${tag(h.status,h.lvl)}</div></div>
+    <div class="field"><div class="k">整改期限</div><div class="v mono">${h.due}</div></div>
+    <div class="field"><div class="k">整改闭环时间轴</div></div>
+    <div class="tl">${tl}</div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button><button class="btn primary" onclick="closeDrawer();alert('已推送督办通知')">督办催办</button></div>`);
+}
+
+// ====== 新增隐患抽屉 ======
+document.getElementById('btnNewHidden').onclick=()=>{
+  const distOpts=DB.districts.map(d=>`<option>${d}</option>`).join('');
+  const typeOpts=allTypes.map(t=>`<option>${t}</option>`).join('');
+  openDrawer('新增隐患上报',`
+    <div class="field"><div class="k">隐患类型</div><select class="form-in">${typeOpts}<option>其他</option></select></div>
+    <div class="field"><div class="k">隐患等级</div><select class="form-in"><option>红</option><option>橙</option><option>黄</option><option>蓝</option></select></div>
+    <div class="field"><div class="k">所在区县</div><select class="form-in">${distOpts}</select></div>
+    <div class="field"><div class="k">隐患位置</div><input class="form-in" placeholder="如 宁江区-松江大街 GP-001"></div>
+    <div class="field"><div class="k">责任单位</div><input class="form-in" placeholder="如 宁江燃气公司"></div>
+    <div class="field"><div class="k">整改期限</div><input class="form-in" type="date" value="2026-09-15"></div>
+    <div class="field"><div class="k">隐患描述</div><textarea class="form-in" rows="3" placeholder="请描述隐患具体情况..."></textarea></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer();alert('隐患已上报登记，编号 H-2411')">提交上报</button></div>`);
+};
+
+
+// ====== 底部流程 ======
+const flowSteps=[
+  {ic:'M9 11l3 3L22 4 M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11',st:'台账登记',ds:'巡查/监测/投诉发现隐患，统一登记入台账'},
+  {ic:'M9 12l2 2 4-4 M21 12a9 9 0 11-18 0 9 9 0 0118 0z',st:'审核推送',ds:'住建局审核定级，推送责任单位限期整改'},
+  {ic:'M20 6L9 17l-5-5 M14 6l2 2 2-2',st:'整改反馈',ds:'责任单位实施整改，提交整改反馈及佐证'},
+  {ic:'M3 12h4l3-9 4 18 3-9h4',st:'跟踪督查',ds:'监管人员现场跟踪复核，确保整改到位'},
+  {ic:'M9 12l2 2 4-4 M21 12a9 9 0 11-18 0 9 9 0 0118 0z M9 12l2 2 4-4',st:'验收销号',ds:'验收合格后销号闭环，纳入统计考核'},
+];
+document.getElementById('hFlow').innerHTML=`<div class="flow">${flowSteps.map((s,i)=>`
+  <div class="step"><div class="ic">${svgIcon(s.ic,18)}</div><div class="st">${s.st}</div><div class="ds">${s.ds}</div></div>
+  ${i<flowSteps.length-1?`<div class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>`:''}`).join('')}</div>`;
+
+renderHTbl();
+
+// ====== 真实地图（Leaflet + 图层勾选） ======
+(function initRealMap(){
+  function go(){
+    if(typeof L==='undefined'){return setTimeout(go,500)}
+    const el=document.getElementById('leafMap');if(!el)return;
+    const gm=initGasMap('leafMap',{theme:'risk'});
+    if(gm){gm.renderLayerCtrl('layerCtrl');setTimeout(()=>gm.map.invalidateSize(),200);}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+})();
+</script></body></html>

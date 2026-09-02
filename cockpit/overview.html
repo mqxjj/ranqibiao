@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>燃气概况一张图 - 某某智慧燃气监管</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* 仅页面专属布局微调 */
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.ov-body{display:grid;grid-template-columns:1fr 440px;gap:14px}
+.ov-bottom{display:grid;grid-template-columns:1fr 360px;gap:14px}
+.kpi.mini .val{font-size:24px}
+.themesec{margin-bottom:14px}
+.themesec:last-child{margin-bottom:0}
+.themesec .sh{font-size:12px;color:var(--sub);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.themesec .sh::before{content:"";width:2px;height:11px;background:var(--accent);border-radius:1px;box-shadow:0 0 6px var(--accent)}
+.minibar{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px}
+.minibar .lab{flex:0 0 84px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.minibar .bar{flex:1}
+.minibar .num{font-family:var(--mono);color:var(--accent3);flex:0 0 30px;text-align:right}
+@keyframes mring{0%{r:3;opacity:.9}100%{r:14;opacity:0}}
+@keyframes mring2{0%{r:3;opacity:.9}50%{opacity:.5}100%{r:22;opacity:0}}
+.pulse-ring{animation:mring 2s ease-out infinite}
+.pulse-ring2{animation:mring2 2.6s ease-out infinite .6s}
+</style>
+</head>
+<body data-page="overview">
+<div class="bg-atmos"></div>
+<header class="topbar">
+<span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span>
+<div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div>
+<div class="crumb">监管应用 / <b>燃气概况一张图</b></div>
+<div class="sp"></div>
+<div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div>
+</header>
+<aside class="sidenav" id="nav"></aside>
+<main class="main">
+  <!-- ====== 顶部 KPI ====== -->
+  <div class="g5" id="ovKpi"></div>
+  <!-- ====== 主体：大地图 + 主题面板 ====== -->
+  <div class="ov-body mt12">
+    <div class="panel" data-r="80">
+      <div class="panel-h"><span class="t">某某市燃气一张图</span><span class="more">5区县 · 12场站 · 实时</span></div>
+      <div class="panel-b" style="padding:0">
+        <div class="mapwrap" style="height:486px">
+          <div id="leafMap" style="position:absolute;inset:0;z-index:1"></div>
+          <div class="map-ctrl" id="layerCtrl" style="position:absolute;right:18px;top:14px;z-index:500"></div>
+          <div class="legend">
+            <div><i style="background:linear-gradient(90deg,#22D3EE,#7C3AED)"></i>燃气管网</div>
+            <div><i style="background:#22D3EE;border-radius:50%;width:8px;height:8px"></i>场站设施</div>
+            <div><i style="background:#FF4D5E;border-radius:50%;width:8px;height:8px"></i>报警点位</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel flex-1" data-r="140">
+      <div class="panel-h"><span class="t">主题分析</span><span class="more" id="themeMore">3主题</span></div>
+      <div class="panel-b">
+        <div class="tabbar" id="themeTabs">
+          <button class="on" data-theme="pipe">管网GIS</button>
+          <button data-theme="risk">安全风险</button>
+          <button data-theme="emergency">应急调度</button>
+        </div>
+        <div id="themeBody"></div>
+      </div>
+    </div>
+  </div>
+  <!-- ====== 底部：企业监管 + 用户结构 ====== -->
+  <div class="ov-bottom mt12">
+    <div class="panel" data-r="200">
+      <div class="panel-h"><span class="t">燃气企业监管</span><span class="more">5家</span></div>
+      <div class="panel-b" style="padding:8px">
+        <table class="tbl" id="entTbl"></table>
+      </div>
+    </div>
+    <div class="panel" data-r="240">
+      <div class="panel-h"><span class="t">用户结构</span><span class="more">城镇/农村</span></div>
+      <div class="panel-b">
+        <div class="flex gap12 aic">
+          <div class="donut" style="width:120px;height:120px;flex:0 0 120px">
+            <canvas id="userDonut" style="width:120px;height:120px"></canvas>
+            <div class="cap"><div class="v">42.86</div><div class="l">万户</div></div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <canvas id="userBar" style="width:100%;height:120px"></canvas>
+          </div>
+        </div>
+        <div class="mt8" id="userLegend"></div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="mock.js"></script>
+<script src="shell.js"></script>
+<script src="map.js"></script>
+<script>
+// ====== 顶部 KPI ======
+const ovKpi=[
+  {lab:'管道燃气用户',val:(DB.kpi.users.val/10000).toFixed(2),u:'万户',trend:DB.kpi.users.trend,icon:'M12 3h7v7M20 14v7h-7M3 14v7h7'},
+  {lab:'管网总长',val:fmt(DB.kpi.pipe.val),u:'公里',trend:DB.kpi.pipe.trend,icon:'M3 12h18M6 6l-3 6 3 6M18 6l3 6-3 6'},
+  {lab:'场站设施',val:fmt(DB.kpi.stations.val),u:'座',trend:DB.kpi.stations.trend,icon:'M5 21V8l7-5 7 5v13M9 21v-6h6v6'},
+  {lab:'物联设备',val:fmt(DB.kpi.devices.val),u:'台',trend:DB.kpi.devices.trend,icon:'M2 8l10-6 10 6-10 6L2 8z M2 14l10 6 10-6'},
+  {lab:'燃气企业',val:fmt(DB.enterprises.length),u:'家',trend:0,icon:'M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6'}
+];
+document.getElementById('ovKpi').innerHTML=ovKpi.map((k,i)=>`
+  <div class="kpi" data-r="${i*40}">
+    <div class="glow"></div>
+    <div class="lab">${svgIcon(k.icon,14)} ${k.lab}</div>
+    <div class="val">${k.val}<span class="u">${k.u}</span></div>
+    <div class="trend ${k.trend>0?'up':k.trend<0?'down':'flat'}">${k.trend>0?'▲':k.trend<0?'▼':'—'} ${k.trend?Math.abs(k.trend)+'%':'持平'}</div>
+  </div>`).join('');
+
+// 场站详情（地图点位 + 列表行共用）
+function stationDetail(i){
+  const s=DB.stations[i];
+  openDrawer(s.name,`<div class="field"><div class="k">编号</div><div class="v mono">${s.id}</div></div>
+    <div class="field"><div class="k">类型</div><div class="v">${s.type}</div></div>
+    <div class="field"><div class="k">所在区县</div><div class="v">${s.dist}</div></div>
+    <div class="field"><div class="k">运行压力</div><div class="v mono">${s.press}</div></div>
+    <div class="field"><div class="k">负责人</div><div class="v">${s.head}</div></div>
+    <div class="field"><div class="k">运行状态</div><div class="v">${s.status==='正常'?'<span class="t-ok">● 正常</span>':'<span class="t-warn">● 关注</span>'}</div></div>
+    <div class="field"><div class="k">关联管网</div><div class="v mono">${DB.pipelines[i%DB.pipelines.length]?.id||'--'}</div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+// ====== 企业详情 ======
+function entDetail(i){
+  const e=DB.enterprises[i];
+  openDrawer(e.name,`<div class="field"><div class="k">所在区县</div><div class="v">${e.dist}</div></div>
+    <div class="field"><div class="k">供气用户</div><div class="v mono">${fmt(e.users)} 户</div></div>
+    <div class="field"><div class="k">管网长度</div><div class="v mono">${e.pipe} 公里</div></div>
+    <div class="field"><div class="k">场站数量</div><div class="v mono">${e.stations} 座</div></div>
+    <div class="field"><div class="k">信用等级</div><div class="v">${e.rate==='A'?'<span class="tag ok">A 级</span>':'<span class="tag warn">B 级</span>'}</div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+// ====== 主题面板 ======
+function renderTheme(theme){
+  const body=document.getElementById('themeBody');
+  document.getElementById('themeMore').textContent={pipe:'管网GIS',risk:'安全风险',emergency:'应急调度'}[theme];
+  if(theme==='pipe'){
+    const dType={};
+    DB.devices.forEach(d=>dType[d.type]=(dType[d.type]||0)+1);
+    body.innerHTML=`
+      <div class="themesec">
+        <div class="sh">管网信息</div>
+        <div class="flex jcb fz12"><span class="t-sub">管网总长</span><span class="mono t-accent fz16">${fmt(DB.kpi.pipe.val)} 公里</span></div>
+        <div class="flex jcb fz12 mt8"><span class="t-sub">管线条数</span><span class="mono">${DB.pipelines.length} 条</span></div>
+        <div class="flex jcb fz12 mt8"><span class="t-sub">压力级制</span><span class="t-sub">高压 / 次高压 / 中压 / 低压</span></div>
+      </div>
+      <div class="themesec">
+        <div class="sh">场站列表</div>
+        <div class="list">${DB.stations.slice(0,6).map(s=>`
+          <div class="row" onclick="stationDetail(${DB.stations.indexOf(s)})"><span class="c">${s.name}</span><span class="loc">${s.type}</span>${s.status==='正常'?tag('正常','蓝'):tag('关注','黄')}</div>`).join('')}</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">设施设备分布</div>
+        ${Object.entries(dType).map(([t,v])=>`
+          <div class="minibar"><span class="lab">${t}</span><div class="bar"><i style="width:${v*28}%"></i></div><span class="num">${v}</span></div>`).join('')}
+      </div>
+      <div class="themesec">
+        <div class="sh">供气情况</div>
+        <div class="flex gap12 aic">
+          <div class="donut" style="width:96px;height:96px;flex:0 0 96px">
+            <canvas id="gasDonut" style="width:96px;height:96px"></canvas>
+            <div class="cap"><div class="v" style="font-size:16px">72.9%</div><div class="l">城镇</div></div>
+          </div>
+          <div style="flex:1">${DB.users.map(u=>`
+            <div class="flex jcb fz12 mt8"><span class="t-sub">${u.type}</span><span class="mono t-accent">${fmt(u.v)}户</span></div>`).join('')}</div>
+        </div>
+      </div>
+      <div class="themesec">
+        <div class="sh">用气户情况</div>
+        <div class="flex jcb fz12"><span class="t-sub">总用户数</span><span class="mono t-accent fz16">${fmt(DB.kpi.users.val)} 户</span></div>
+        <div class="flex jcb fz12 mt8"><span class="t-sub">城镇 / 农村</span><span class="mono">${fmt(DB.users[0].v)} / ${fmt(DB.users[1].v)}</span></div>
+      </div>`;
+    donut(document.getElementById('gasDonut'),[{v:72.9,color:'#22D3EE'},{v:27.1,color:'#7C3AED'}]);
+  } else if(theme==='risk'){
+    const hStat={};
+    DB.hidden.forEach(h=>hStat[h.status]=(hStat[h.status]||0)+1);
+    body.innerHTML=`
+      <div class="themesec">
+        <div class="sh">风险四色区</div>
+        <div class="list">${DB.risks.slice(0,6).map(r=>`
+          <div class="row">${lvlTag(r.lvl)}<span class="c">${r.area}</span><span class="mono t-accent">${r.score}分</span></div>`).join('')}</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">隐患点位</div>
+        <div class="list">${DB.hidden.slice(0,5).map(h=>`
+          <div class="row">${lvlTag(h.lvl)}<span class="c">${h.type} · ${h.loc}</span>${tag(h.status,h.lvl)}</div>`).join('')}</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">报警情况</div>
+        <div class="list">${DB.alarms.slice(0,5).map(a=>`
+          <div class="row">${lvlTag(a.lvl)}<span class="c">${a.type} · ${a.loc}</span>${tag(a.status,a.lvl)}</div>`).join('')}</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">隐患整改分布</div>
+        ${Object.entries(hStat).map(([s,v])=>`
+          <div class="minibar"><span class="lab">${s}</span><div class="bar ${v>=3?'warn':''}"><i style="width:${v*30}%"></i></div><span class="num">${v}</span></div>`).join('')}
+      </div>
+      <div class="themesec">
+        <div class="sh">热力图说明</div>
+        <div class="fz12 t-sub">基于历史报警、隐患、风险分值叠加生成燃气安全热力分布，红色区域为高风险聚集区，已在地图以脉冲点标注，可联动隐患/报警列表下钻。</div>
+      </div>`;
+  } else {
+    body.innerHTML=`
+      <div class="themesec">
+        <div class="sh">事故点位</div>
+        <div class="list">${DB.alarms.filter(a=>a.lvl==='红').map(a=>`
+          <div class="row">${lvlTag(a.lvl)}<span class="c">${a.type} · ${a.loc}</span>${tag(a.status,a.lvl)}</div>`).join('')}</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">周边阀门分布</div>
+        <div class="list">${DB.stations.filter(s=>s.type==='调压站'||s.type==='门站').slice(0,5).map(s=>`
+          <div class="row" onclick="stationDetail(${DB.stations.indexOf(s)})"><span class="c">${s.name}</span><span class="loc">${s.press}</span>${tag(s.status==='正常'?'正常':'关注',s.status==='正常'?'蓝':'黄')}</div>`).join('')}</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">救援车辆</div>
+        <div class="row2" style="gap:6px">${DB.emergency.vehicles.map(v=>`
+          <div class="flex jcb fz12"><span class="t-sub">${v.n}</span><span class="mono">${v.on}/${v.v}</span></div>`).join('')}</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">人员队伍</div>
+        <div class="row2" style="gap:6px">${DB.emergency.teams.map(t=>`
+          <div class="flex jcb fz12"><span class="t-sub">${t.n}</span><span class="mono">${t.v}支</span></div>`).join('')}</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">视频监控</div>
+        <div class="fz12 t-sub">事故周边3路视频已接入，支持现场画面实时回传与录像调阅，配合无人机进行空中态势巡查。</div>
+      </div>
+      <div class="themesec">
+        <div class="sh">泄漏爆炸模型结果</div>
+        ${DB.leakModels.map(m=>`
+          <div class="field"><div class="k">${m.name}</div><div class="v">${m.desc}</div><div class="v mono t-accent mt8">${m.result}</div></div>`).join('')}
+      </div>`;
+  }
+}
+document.querySelectorAll('#themeTabs button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#themeTabs button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    renderTheme(b.dataset.theme);
+  };
+});
+renderTheme('pipe');
+
+// ====== 企业监管表 ======
+document.getElementById('entTbl').innerHTML=`
+<thead><tr><th>企业</th><th>区县</th><th>用户数</th><th>管网(km)</th><th>场站</th><th>等级</th></tr></thead>
+<tbody>${DB.enterprises.map((e,i)=>`
+  <tr style="cursor:pointer" onclick="entDetail(${i})">
+    <td>${e.name}</td><td>${e.dist}</td>
+    <td class="num">${fmt(e.users)}</td>
+    <td class="num">${e.pipe}</td>
+    <td class="num">${e.stations}</td>
+    <td>${e.rate==='A'?'<span class="tag ok">A</span>':'<span class="tag warn">B</span>'}</td>
+  </tr>`).join('')}</tbody>`;
+
+// ====== 用户结构：环形 + 柱状 ======
+donut(document.getElementById('userDonut'),[{v:72.9,color:'#22D3EE'},{v:27.1,color:'#7C3AED'}]);
+barChart(document.getElementById('userBar'),DB.enterprises.map(e=>e.users),DB.enterprises.map(e=>e.dist.replace(/县|市|区/,'')));
+document.getElementById('userLegend').innerHTML=DB.users.map(u=>`
+  <div class="flex jcb fz12 mt8"><span class="t-sub">${u.type}</span><span class="mono">${fmt(u.v)}户 (${u.pct}%)</span></div>`).join('');
+
+// ====== 真实地图（Leaflet + 图层勾选） ======
+(function initRealMap(){
+  function go(){
+    if(typeof L==='undefined'){return setTimeout(go,500)}
+    const el=document.getElementById('leafMap');if(!el)return;
+    const gm=initGasMap('leafMap',{theme:'pipe'});
+    if(gm){
+      gm.renderLayerCtrl('layerCtrl');
+      setTimeout(()=>gm.map.invalidateSize(),200);
+      // 主题 tabs 联动：管网GIS / 安全风险 / 应急调度
+      const tabs=document.querySelectorAll('[data-theme]');
+      tabs.forEach(b=>{
+        const old=b.onclick;b.onclick=function(e){
+          if(old)old.call(b,e);
+          gm.setTheme(b.dataset.theme);
+          const ly={pipe:true,station:true,alarm:b.dataset.theme!=='pipe',
+            hazard:b.dataset.theme==='risk'||b.dataset.theme==='emergency',
+            protect:b.dataset.theme==='risk'||b.dataset.theme==='emergency'};
+          document.querySelectorAll('#layerCtrl input[data-ly]').forEach(i=>{i.checked=!!ly[i.dataset.ly]});
+        };
+      });
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+})();
+</script>
+</body>
+</html>

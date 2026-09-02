@@ -1,0 +1,189 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920,initial-scale=1"><title>预测预警 - 某某智慧燃气监管</title><link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* 页面专属微调 */
+.rt-kpi{display:flex;flex-direction:column;gap:6px;padding:14px 16px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);position:relative;overflow:hidden}
+.rt-kpi .lab{font-size:12px;color:var(--sub);display:flex;align-items:center;gap:6px}
+.rt-kpi .lab svg{width:14px;height:14px;color:var(--accent)}
+.rt-kpi .val{font-family:var(--mono);font-size:28px;font-weight:700;line-height:1;color:var(--text);text-shadow:0 0 14px rgba(34,211,238,.4)}
+.rt-kpi .val .u{font-size:12px;color:var(--sub);margin-left:3px;font-family:var(--sans);font-weight:400}
+.rt-kpi .sub{font-size:11px;color:var(--dim)}
+.rt-kpi .glow{position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(34,211,238,.22),transparent 70%)}
+.rt-kpi.alarm{border-color:var(--danger);box-shadow:0 0 18px rgba(255,77,94,.25)}
+.rt-kpi.alarm .val{color:var(--danger);text-shadow:0 0 14px rgba(255,77,94,.5)}
+.rt-kpi.alarm .glow{background:radial-gradient(circle,rgba(255,77,94,.28),transparent 70%)}
+.rt-kpi .stat-tg{position:absolute;right:12px;top:12px}
+/* 处置流程 */
+.pflow{display:flex;align-items:stretch;gap:0}
+.pflow .stp{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);position:relative;cursor:pointer;transition:.2s}
+.pflow .stp .num{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);color:var(--sub);background:rgba(34,211,238,.08);border:1px solid var(--line)}
+.pflow .stp .nm{font-size:12px;color:var(--sub)}
+.pflow .stp.on{border-color:var(--accent);background:rgba(34,211,238,.1);box-shadow:0 0 12px rgba(34,211,238,.2)}
+.pflow .stp.on .num{color:#04122A;background:var(--accent);border-color:var(--accent)}
+.pflow .stp.on .nm{color:var(--accent3);font-weight:600}
+.pflow .ar{flex:0 0 22px;display:flex;align-items:center;justify-content:center;color:var(--dim)}
+.pflow .ar svg{width:16px;height:16px}
+.form-in{width:100%;background:rgba(8,17,38,.6);border:1px solid var(--line);color:var(--text);border-radius:var(--r-sm);padding:6px 8px;font-size:12px;font-family:var(--sans);outline:none}
+.form-in:focus{border-color:var(--accent)}
+.tbl tbody tr{cursor:pointer}
+.warn-row{cursor:pointer}
+</style></head><body data-page="warning"><div class="bg-atmos"></div><header class="topbar"><span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span><div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div><div class="crumb">监管应用 / <b>预测预警</b></div><div class="sp"></div><div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div></header><aside class="sidenav" id="nav"></aside><main class="main">
+  <!-- ====== 顶部：实时监测值 ====== -->
+  <div class="grid g-4" style="margin-bottom:14px" id="rtGrid"></div>
+  <!-- ====== 中部 ====== -->
+  <div class="grid" style="grid-template-columns:1.5fr 1fr;gap:14px;margin-bottom:14px">
+    <!-- 左列 -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <!-- 报警审核列表 -->
+      <div class="panel flex-1" data-r="80">
+        <div class="panel-h"><span class="t">报警及审核列表</span><span class="more">实时 · 10 条</span></div>
+        <div class="panel-b"><div class="list" id="alarmList"></div></div>
+      </div>
+      <!-- 预警处置流程 -->
+      <div class="panel" data-r="160">
+        <div class="panel-h"><span class="t">预警处置流程</span><span class="more" id="flowDesc">点击步骤查看说明</span></div>
+        <div class="panel-b"><div class="pflow" id="pFlow"></div></div>
+      </div>
+    </div>
+    <!-- 右列 -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <!-- 泄漏预警 + 阈值 -->
+      <div class="panel" data-r="120">
+        <div class="panel-h"><span class="t">燃气泄漏预警 · 阈值设置</span><span class="more">当前 <b class="t-danger" id="leakCnt">2</b> 起</span></div>
+        <div class="panel-b">
+          <div id="leakList" style="margin-bottom:12px"></div>
+          <div class="fz12 t-sub fw6" style="margin-bottom:8px">预警阈值设置</div>
+          <div class="field"><div class="k">可燃气体浓度报警阈值（%LEL）</div><input class="form-in" id="thGas" type="number" value="25" min="1" max="100"></div>
+          <div class="row2 gap8">
+            <div class="field"><div class="k">管网压力下限（MPa）</div><input class="form-in" id="thPmin" type="number" value="0.20" step="0.01"></div>
+            <div class="field"><div class="k">管网压力上限（MPa）</div><input class="form-in" id="thPmax" type="number" value="0.50" step="0.01"></div>
+          </div>
+          <div class="flex gap8" style="justify-content:flex-end"><button class="btn primary" id="btnSaveTh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg>保存阈值</button></div>
+        </div>
+      </div>
+      <!-- 档案 + 趋势 -->
+      <div class="panel flex-1" data-r="200">
+        <div class="panel-h"><span class="t">档案管理 · 报警趋势</span><span class="more">近7日</span></div>
+        <div class="panel-b">
+          <div class="fz12 t-sub fw6" style="margin-bottom:6px">已处置预警档案</div>
+          <table class="tbl" id="arcTbl"><thead><tr><th>警情ID</th><th>时间</th><th>类型</th><th>等级</th><th>状态</th></tr></thead><tbody id="arcBody"></tbody></table>
+          <div class="mt12"><div class="fz12 t-sub fw6" style="margin-bottom:4px">近7日报警趋势</div><canvas id="alarmTrend" style="width:100%;height:90px"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ====== 底部说明 ====== -->
+  <div class="panel" data-r="240">
+    <div class="panel-h"><span class="t">预测预警体系说明</span></div>
+    <div class="panel-b" id="warnNote"></div>
+  </div>
+</main><script src="mock.js"></script><script src="shell.js"></script><script src="map.js"></script><script>
+// ====== 实时监测值（来源 DB.devices） ======
+const rt=[
+  {k:'pressure',lab:'管网压力',base:0.31,u:'MPa',ic:'M3 12h4l3-9 4 18 3-9h4',dev:'DT-002',sub:'宁江区-镜湖调压站',alarm:false},
+  {k:'gas',lab:'可燃气体浓度',base:0.21,u:'%LEL',ic:'M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z',dev:'DT-007',sub:'乾安县-乾安大街',alarm:true},
+  {k:'flow',lab:'管网流量',base:1280,u:'m³/h',ic:'M3 12c0-5 4-9 9-9s9 4 9 9-4 9-9 9 M8 12l4-4 4 4',dev:'DT-004',sub:'前郭县-前郭门站',alarm:false},
+  {k:'temp',lab:'管网温度',base:-8,u:'℃',ic:'M14 4v10.5a4 4 0 11-4 0V4a2 2 0 014 0z',dev:'DT-011',sub:'宁江区-松原门站',alarm:false},
+];
+document.getElementById('rtGrid').innerHTML=rt.map((r,i)=>`<div class="rt-kpi ${r.alarm?'alarm':''}" data-r="${i*60}">
+  <div class="glow"></div><div class="lab">${svgIcon(r.ic,14)} ${r.lab}</div>
+  <div class="val" id="rt-${r.k}">${r.base}<span class="u">${r.u}</span></div>
+  <div class="sub">${r.sub} · 设备 ${r.dev}</div>
+  ${r.alarm?'<span class="stat-tg"><span class="tag danger blink">报警</span></span>':'<span class="stat-tg"><span class="tag ok">正常</span></span>'}</div>`).join('');
+
+// 每 5s 随机微动刷新
+function jitter(v,amp,dec){const n=v+(Math.random()*2-1)*amp;return dec?Math.round(n*100)/100:Math.round(n);}
+setInterval(()=>{
+  document.getElementById('rt-pressure').innerHTML=jitter(0.31,0.015,1)+'<span class="u">MPa</span>';
+  document.getElementById('rt-gas').innerHTML=jitter(0.21,0.03,2)+'<span class="u">%LEL</span>';
+  document.getElementById('rt-flow').innerHTML=fmt(jitter(1280,35,0))+'<span class="u">m³/h</span>';
+  document.getElementById('rt-temp').innerHTML=jitter(-8,1.2,0)+'<span class="u">℃</span>';
+},5000);
+
+// ====== 报警及审核列表 ======
+document.getElementById('alarmList').innerHTML=DB.alarms.map(a=>`
+  <div class="row warn-row" data-id="${a.id}">
+    <span class="t">${a.time.slice(0,5)}</span>${lvlTag(a.lvl)}
+    <span class="c">${a.type} · ${a.loc}</span>
+    <span class="loc">${a.deal}</span>
+    ${tag(a.status,a.lvl)}
+    <button class="btn" onclick="event.stopPropagation();openAudit('${a.id}')">审核</button>
+  </div>`).join('');
+document.querySelectorAll('.warn-row').forEach(r=>r.onclick=()=>openAudit(r.dataset.id));
+
+// ====== 预警处置流程（横向，可点击高亮） ======
+const flowSteps=[
+  {nm:'实时监测',ds:'物联网设备7×24不间断采集压力/浓度/流量/温度数据'},
+  {nm:'自动报警',ds:'监测值越阈值自动触发报警，推送至监管平台'},
+  {nm:'人工审核',ds:'值班人员审核报警真实性，剔除误报，确认预警级别'},
+  {nm:'派单处置',ds:'按预警级别派发工单至对应燃气企业/抢修队伍'},
+  {nm:'现场处置',ds:'处置人员到达现场，关阀/抢修/疏散/检测'},
+  {nm:'闭环归档',ds:'处置完成确认恢复，归入预警档案库统计'},
+];
+let flowCur=2; // 当前停在“人工审核”
+function renderFlow(){
+  document.getElementById('pFlow').innerHTML=flowSteps.map((s,i)=>`
+    <div class="stp ${i===flowCur?'on':''}" data-i="${i}"><div class="num">${i+1}</div><div class="nm">${s.nm}</div></div>
+    ${i<flowSteps.length-1?`<div class="ar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>`:''}`).join('');
+  document.getElementById('flowDesc').textContent=flowSteps[flowCur].nm+'：'+flowSteps[flowCur].ds;
+  document.querySelectorAll('.pflow .stp').forEach(el=>el.onclick=()=>{flowCur=+el.dataset.i;renderFlow();});
+}
+renderFlow();
+
+// ====== 审核抽屉 ======
+function openAudit(id){
+  const a=DB.alarms.find(x=>x.id===id);if(!a)return;
+  openDrawer('报警审核 · '+a.id,`
+    <div class="field"><div class="k">警情类型</div><div class="v">${a.type} ${lvlTag(a.lvl)}</div></div>
+    <div class="field"><div class="k">发生时间</div><div class="v mono">${a.time}</div></div>
+    <div class="field"><div class="k">发生位置</div><div class="v">${a.loc}</div></div>
+    <div class="field"><div class="k">处置单位</div><div class="v">${a.deal}</div></div>
+    <div class="field"><div class="k">当前状态</div><div class="v">${tag(a.status,a.lvl)}</div></div>
+    <div class="field"><div class="k">审核意见</div><textarea class="form-in" rows="3" placeholder="请填写审核意见..."></textarea></div>
+    <div class="field"><div class="k">处置级别</div><select class="form-in"><option>保持原级 ${a.lvl}</option><option>提升为红色</option><option>降为黄色</option><option>判定误报</option></select></div>
+    <div class="field"><div class="k">派单单位</div><input class="form-in" value="${a.deal}"></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">取消</button>
+      <button class="btn" onclick="closeDrawer();alert('已标记为误报，归档')">误报归档</button>
+      <button class="btn primary" onclick="closeDrawer();alert('审核通过，已派单至'+a.deal)">审核通过派单</button></div>`);
+}
+
+// ====== 泄漏预警面板（红橙级别） ======
+const leakAlarms=DB.alarms.filter(a=>a.lvl==='红'||a.lvl==='橙');
+const leakActive=leakAlarms.filter(a=>a.status!=='已恢复'&&a.status!=='已闭环');
+document.getElementById('leakCnt').textContent=leakActive.length;
+document.getElementById('leakList').innerHTML=leakAlarms.map(a=>`
+  <div class="row" style="cursor:pointer" onclick="openAudit('${a.id}')">
+    <span class="t">${a.time.slice(0,5)}</span>${lvlTag(a.lvl)}
+    <span class="c">${a.type} · ${a.loc}</span>
+    ${tag(a.status,a.lvl)}</div>`).join('');
+
+// ====== 阈值保存 ======
+document.getElementById('btnSaveTh').onclick=()=>{
+  const g=document.getElementById('thGas').value,pmin=document.getElementById('thPmin').value,pmax=document.getElementById('thPmax').value;
+  closeDrawer();
+  openDrawer('阈值保存结果',`<div class="field"><div class="k">可燃气体浓度报警阈值</div><div class="v mono t-danger">${g}%LEL</div></div>
+    <div class="field"><div class="k">管网压力范围</div><div class="v mono">${pmin} ~ ${pmax} MPa</div></div>
+    <div class="field"><div class="k">生效范围</div><div class="v">全市 ${DB.devices.length} 台物联监测设备</div></div>
+    <div class="field"><div class="k">状态</div><div class="v"><span class="t-ok">● 阈值已下发并生效</span></div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">确定</button></div>`);
+};
+
+// ====== 档案管理（已恢复/已闭环） ======
+const arc=DB.alarms.filter(a=>a.status==='已恢复'||a.status==='已闭环');
+document.getElementById('arcBody').innerHTML=arc.map(a=>`<tr onclick="openAudit('${a.id}')">
+  <td class="mono t-accent">${a.id}</td><td class="mono">${a.time}</td><td>${a.type}</td><td>${lvlTag(a.lvl)}</td><td>${tag(a.status,a.lvl)}</td></tr>`).join('');
+
+// ====== 报警趋势 ======
+lineChart(document.getElementById('alarmTrend'),DB.alarmTrend,{color:'#FF4D5E'});
+
+// ====== 底部说明 ======
+const note=[
+  {t:'动态监测',d:'基于物联网感知设备，对管网压力、可燃气体浓度、流量、温度等关键参数进行动态实时采集与监测'},
+  {t:'物联接入',d:'全市 9420 台物联设备统一接入，在线率 97.2%，覆盖管网、场站、调压设施全要素'},
+  {t:'不间断监控',d:'7×24 小时不间断运行，毫秒级数据上报，异常自动触发报警与推送，确保不漏报'},
+  {t:'时效处置',d:'报警→审核→派单→处置→闭环全流程线上化，平均响应时效 ≤15 分钟，闭环率 100%'},
+];
+document.getElementById('warnNote').innerHTML=`<div class="grid g-4">${note.map(n=>`
+  <div style="padding:6px 4px"><div class="fw6 t-accent fz16">${n.t}</div><div class="fz12 t-sub mt8" style="line-height:1.7">${n.d}</div></div>`).join('')}</div>`;
+</script></body></html>

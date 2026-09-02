@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>基础信息管理 - 某某智慧燃气监管</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* 仅页面专属布局微调 */
+select.sel{padding:5px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:var(--sans);outline:none;cursor:pointer}
+select.sel option{background:var(--bg2)}
+select.sel:focus{border-color:var(--accent)}
+input.inp,textarea.inp{width:100%;padding:6px 8px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:var(--sans);outline:none}
+input.inp:focus,textarea.inp:focus{border-color:var(--accent)}
+.bs-gis{border:1px solid var(--line);border-radius:var(--r-sm);background:radial-gradient(circle at 50% 50%,rgba(14,29,61,.5),rgba(5,10,26,.9));overflow:hidden}
+.bs-gis svg{display:block;width:100%;height:140px}
+.minibar{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}
+.minibar .lab{flex:0 0 64px;color:var(--sub)}
+.minibar .bar{flex:1}
+.minibar .num{font-family:var(--mono);color:var(--accent3);flex:0 0 30px;text-align:right}
+.tblwrap{overflow-x:auto}
+</style>
+</head>
+<body data-page="basic">
+<div class="bg-atmos"></div>
+<header class="topbar">
+<span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span>
+<div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div>
+<div class="crumb">监管应用 / <b>基础信息管理</b></div>
+<div class="sp"></div>
+<div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div>
+</header>
+<aside class="sidenav" id="nav"></aside>
+<main class="main">
+  <div class="tabbar" id="bTabs">
+    <button class="on" data-tab="pipe">管线档案</button>
+    <button data-tab="station">场站档案</button>
+    <button data-tab="hazard">危险源</button>
+    <button data-tab="protect">防护目标</button>
+  </div>
+  <div id="tabBody" data-r="60">
+    <!-- Fallback DOM 占位：JS全部崩溃时仍不致整页空白，渲染完成后被内容覆盖 -->
+    <div class="panel flex-1" style="margin:12px 0 0 0">
+      <div class="panel-h"><span class="t">基础信息管理 · 正在初始化</span><span class="more">若5秒仍无内容请刷新</span></div>
+      <div class="panel-b">
+        <div style="padding:30px;color:#9FB4D1;font-size:13px;line-height:2.2">
+          <p>• 默认加载 <b style="color:#22D3EE">「管线档案」</b>：含12条示例管线，支持按<b>区县 / 材质 / 压力</b>筛选，分页浏览，点击行弹出详情弹窗。</p>
+          <p>• 切换Tab：<b>场站档案 / 危险源 / 防护目标</b> 分别提供筛选表格与真实GIS地图，防护目标支持 <b>"一键上图"</b> 分布展示。</p>
+          <p>• 底部统计区：<b>管线总长 KPI / 材质分布甜甜圈 / 敷设年代柱状图</b> 三大指标联动展示。</p>
+          <p style="color:#FBBF24">⏳ 内容加载中，通常 1~2 秒即可显示完整界面…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ====== 底部统计 ====== -->
+  <div class="grid g-3 mt12">
+    <div class="panel" data-r="120">
+      <div class="panel-h"><span class="t">管线总长</span></div>
+      <div class="panel-b" id="lenStat"></div>
+    </div>
+    <div class="panel" data-r="160">
+      <div class="panel-h"><span class="t">材质分布</span></div>
+      <div class="panel-b">
+        <div class="flex gap12 aic">
+          <div class="donut" style="width:100px;height:100px;flex:0 0 100px">
+            <canvas id="matDonut" style="width:100px;height:100px"></canvas>
+            <div class="cap"><div class="v" style="font-size:16px">12</div><div class="l">条</div></div>
+          </div>
+          <div id="matLegend" style="flex:1;min-width:0"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-r="200">
+      <div class="panel-h"><span class="t">年代分布</span></div>
+      <div class="panel-b"><canvas id="yearBar" style="width:100%;height:120px"></canvas></div>
+    </div>
+  </div>
+</main>
+<script src="mock.js"></script>
+<script src="shell.js"></script>
+<script src="map.js"></script>
+<script>
+// ====== 页面本地数据：危险源 / 防护目标（DB 无独立集合，按任务自造） ======
+const hazardSrc=[
+  {id:'WH-01',name:'三岔河LNG储备站',type:'储备站',lvl:'红',dist:'扶余市',desc:'液化天然气储罐，重大危险源'},
+  {id:'WH-02',name:'GP-010高压管段',type:'高压管段',lvl:'红',dist:'扶余市',desc:'D273高压钢管，26.5km'},
+  {id:'WH-03',name:'哈达山储备站',type:'储备站',lvl:'橙',dist:'前郭县',desc:'调压储备站，1.60MPa'},
+  {id:'WH-04',name:'GP-005次高压管段',type:'次高压管段',lvl:'橙',dist:'长岭县',desc:'D159钢管，22.8km，关注状态'},
+  {id:'WH-05',name:'太平山调压站法兰渗漏',type:'法兰渗漏',lvl:'橙',dist:'长岭县',desc:'调压站法兰接口渗漏隐患'},
+  {id:'WH-06',name:'GP-008阴保失效段',type:'阴极保护失效',lvl:'黄',dist:'乾安县',desc:'钢管阴极保护系统失效'}
+];
+const protectTargets=[
+  {id:'PT-01',name:'松原市第一中学',type:'学校',dist:'宁江区',gap:'120m'},
+  {id:'PT-02',name:'松原市中心医院',type:'医院',dist:'宁江区',gap:'85m'},
+  {id:'PT-03',name:'江北居民小区',type:'居民区',dist:'宁江区',gap:'35m'},
+  {id:'PT-04',name:'前郭县人民医院',type:'医院',dist:'前郭县',gap:'160m'},
+  {id:'PT-05',name:'长岭县实验小学',type:'学校',dist:'长岭县',gap:'95m'},
+  {id:'PT-06',name:'乾安县养老院',type:'养老机构',dist:'乾安县',gap:'70m'},
+  {id:'PT-07',name:'扶余市商贸城',type:'商业区',dist:'扶余市',gap:'140m'},
+  {id:'PT-08',name:'三岔河镇政府',type:'机关',dist:'扶余市',gap:'200m'}
+];
+const pageState={pipe:{page:1,size:5},station:{page:1,size:6}};
+
+// ====== 通用分页 ======
+function makePager(page,total,goFn){
+  if(total<=1)return '';
+  let h='<div class="pager">';
+  h+=`<button onclick="${goFn}(${page-1})" ${page<=1?'disabled':''}>上一页</button>`;
+  for(let p=1;p<=total;p++)h+=`<button class="${p===page?'on':''}" onclick="${goFn}(${p})">${p}</button>`;
+  h+=`<button onclick="${goFn}(${page+1})" ${page>=total?'disabled':''}>下一页</button>`;
+  h+=`<span>共 ${total} 页</span></div>`;
+  return h;
+}
+
+// ====== 管线 GIS：改用 Leaflet 真实地图占位容器 ======
+function pipeGisSVG(){
+  return `<div style="position:relative;height:300px;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden">
+    <div id="leafMap" style="position:absolute;inset:0;z-index:1"></div>
+    <div id="layerCtrl" class="map-ctrl" style="position:absolute;right:10px;top:10px;z-index:500"></div>
+  </div>`;
+}
+// Leaflet 地图单例
+let _basicMap=null;
+function ensureBasicMap(theme){
+  const el=document.getElementById('leafMap');if(!el)return;
+  // 若已有旧实例（重建了DOM），先清空
+  if(_basicMap&&!el._leaflet_id){_basicMap=null}
+  if(!_basicMap){
+    _basicMap=initGasMap('leafMap',{theme:theme||'pipe',showLayers:{pipe:true,station:true,alarm:false,hazard:false,protect:false}});
+    if(_basicMap)_basicMap.renderLayerCtrl('layerCtrl');
+  }
+  setTimeout(()=>{if(_basicMap)_basicMap.map.invalidateSize()},100);
+}
+
+// ====== 选项 ======
+const distOpts=DB.districts.map(d=>`<option value="${d}">${d}</option>`).join('');
+const matOpts=[...new Set(DB.pipelines.map(p=>p.mat))].map(m=>`<option value="${m}">${m}</option>`).join('');
+const pressOpts=[...new Set(DB.pipelines.map(p=>p.press))].map(p=>`<option value="${p}">${p}</option>`).join('');
+
+// ====== Tab 渲染 ======
+function renderTab(tab){
+  const body=document.getElementById('tabBody');
+  if(tab==='pipe'){
+    body.innerHTML=`<div class="panel flex-1">
+      <div class="panel-h"><span class="t">管线档案</span><span class="more" id="pipeCnt">12条</span></div>
+      <div class="panel-b">
+        <div class="bs-gis mt8" style="margin-bottom:12px">${pipeGisSVG()}</div>
+        <div class="toolbar">
+          <select class="sel" id="pipeDist" onchange="pipeReset()"><option value="全部">全部区县</option>${distOpts}</select>
+          <select class="sel" id="pipeMat" onchange="pipeReset()"><option value="全部">全部材质</option>${matOpts}</select>
+          <select class="sel" id="pipePress" onchange="pipeReset()"><option value="全部">全部压力</option>${pressOpts}</select>
+          <div class="sp"></div>
+          <button class="btn primary" onclick="newPipeline()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg> 新增管线</button>
+        </div>
+        <div class="tblwrap">
+          <table class="tbl">
+            <thead><tr><th>管线ID</th><th>材质</th><th>管径</th><th>长度(km)</th><th>压力级</th><th>敷设年代</th><th>区县</th><th>状态</th></tr></thead>
+            <tbody id="pipeTbody"></tbody>
+          </table>
+        </div>
+        <div id="pipePager"></div>
+      </div>
+    </div>`;
+    renderPipe();
+    ensureBasicMap('pipe');
+  } else if(tab==='station'){
+    body.innerHTML=`<div class="panel flex-1">
+      <div class="panel-h"><span class="t">场站档案</span><span class="more" id="stCnt">12座</span></div>
+      <div class="panel-b">
+        <div class="toolbar">
+          <select class="sel" id="stDist" onchange="stationReset()"><option value="全部">全部区县</option>${distOpts}</select>
+          <select class="sel" id="stType" onchange="stationReset()"><option value="全部">全部类型</option><option value="门站">门站</option><option value="调压站">调压站</option><option value="储备站">储备站</option></select>
+          <div class="sp"></div>
+          <button class="btn primary" onclick="newStation()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg> 新增场站</button>
+        </div>
+        <div class="tblwrap">
+          <table class="tbl">
+            <thead><tr><th>场站ID</th><th>名称</th><th>类型</th><th>区县</th><th>压力</th><th>负责人</th><th>状态</th></tr></thead>
+            <tbody id="stTbody"></tbody>
+          </table>
+        </div>
+        <div id="stPager"></div>
+      </div>
+    </div>`;
+    renderStation();
+  } else if(tab==='hazard'){
+    const hAgg={};
+    hazardSrc.forEach(h=>hAgg[h.lvl]=(hAgg[h.lvl]||0)+1);
+    body.innerHTML=`<div class="panel flex-1">
+      <div class="panel-h"><span class="t">危险源档案</span><span class="more">${hazardSrc.length}项</span></div>
+      <div class="panel-b">
+        <div class="row2" style="margin-bottom:12px">${Object.entries(hAgg).map(([l,v])=>`
+          <div class="flex aic jcb fz12"><span class="lvl ${LVLCLS[l]}"><i></i>${l}色危险源</span><span class="mono t-accent">${v} 项</span></div>`).join('')}</div>
+        <div id="hazardBars">${Object.entries(hAgg).map(([l,v])=>`
+          <div class="minibar"><span class="lab">${l}色</span><div class="bar ${l==='红'?'danger':l==='橙'?'warn':''}"><i style="width:${v*30}%"></i></div><span class="num">${v}</span></div>`).join('')}</div>
+        <div class="tblwrap mt12">
+          <table class="tbl">
+            <thead><tr><th>编号</th><th>名称</th><th>类型</th><th>等级</th><th>区县</th><th>描述</th></tr></thead>
+            <tbody>${hazardSrc.map((h,i)=>`<tr style="cursor:pointer" onclick="hazardDetail(${i})">
+              <td class="mono">${h.id}</td><td>${h.name}</td><td>${h.type}</td>
+              <td>${lvlTag(h.lvl)}</td><td>${h.dist}</td><td class="t-sub">${h.desc}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  } else {
+    body.innerHTML=`<div class="panel flex-1">
+      <div class="panel-h"><span class="t">防护目标</span><span class="more">${protectTargets.length}个</span></div>
+      <div class="panel-b">
+        <div class="toolbar">
+          <select class="sel" id="ptDist" onchange="renderProtect()"><option value="全部">全部区县</option>${distOpts}</select>
+          <div class="sp"></div>
+          <button class="btn primary" onclick="showOnMap()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 20l-5.5-2.5L9 15l5.5 2.5L9 20zM9 15L3.5 12.5 9 10l5.5 2.5L9 15z M15 20l-5.5-2.5L15 15l5.5 2.5L15 20z"/></svg> 一键上图</button>
+        </div>
+        <div class="tblwrap">
+          <table class="tbl">
+            <thead><tr><th>编号</th><th>名称</th><th>类型</th><th>距管网距离</th><th>区县</th></tr></thead>
+            <tbody id="ptTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+    renderProtect();
+  }
+}
+
+// ====== 管线表 ======
+function renderPipe(){
+  const d=document.getElementById('pipeDist').value;
+  const m=document.getElementById('pipeMat').value;
+  const p=document.getElementById('pipePress').value;
+  let list=DB.pipelines.filter(x=>(d==='全部'||x.dist===d)&&(m==='全部'||x.mat===m)&&(p==='全部'||x.press===p));
+  const ps=pageState.pipe;
+  document.getElementById('pipeCnt').textContent=list.length+'条';
+  const total=Math.max(1,Math.ceil(list.length/ps.size));
+  if(ps.page>total)ps.page=total;
+  const slice=list.slice((ps.page-1)*ps.size,ps.page*ps.size);
+  const tb=document.getElementById('pipeTbody');
+  if(!slice.length)tb.innerHTML='<tr><td colspan="8"><div class="empty">暂无符合条件的管线</div></td></tr>';
+  else tb.innerHTML=slice.map(pl=>{const i=DB.pipelines.indexOf(pl);return `<tr style="cursor:pointer" onclick="pipeDetail(${i})">
+    <td class="mono">${pl.id}</td><td>${pl.mat}</td><td class="mono">${pl.dia}</td>
+    <td class="mono">${pl.len}</td><td>${pl.press}</td><td class="mono">${pl.year}</td>
+    <td>${pl.dist}</td><td>${pl.status==='正常'?tag('正常','蓝'):tag('关注','黄')}</td></tr>`}).join('');
+  document.getElementById('pipePager').innerHTML=makePager(ps.page,total,'pipeGoto');
+}
+function pipeGoto(p){pageState.pipe.page=p;renderPipe()}
+function pipeReset(){pageState.pipe.page=1;renderPipe()}
+function pipeDetail(i){
+  const pl=DB.pipelines[i];
+  openDrawer('管线档案 · '+pl.id,`<div class="field"><div class="k">管线编号</div><div class="v mono">${pl.id}</div></div>
+    <div class="field"><div class="k">材质</div><div class="v">${pl.mat}</div></div>
+    <div class="field"><div class="k">管径</div><div class="v mono">${pl.dia}</div></div>
+    <div class="field"><div class="k">长度</div><div class="v mono">${pl.len} 公里</div></div>
+    <div class="field"><div class="k">压力级制</div><div class="v">${pl.press}</div></div>
+    <div class="field"><div class="k">敷设年代</div><div class="v mono">${pl.year} 年</div></div>
+    <div class="field"><div class="k">所在区县</div><div class="v">${pl.dist}</div></div>
+    <div class="field"><div class="k">运行状态</div><div class="v">${pl.status==='正常'?'<span class="t-ok">● 正常</span>':'<span class="t-warn">● 关注</span>'}</div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+// ====== 场站表 ======
+function renderStation(){
+  const d=document.getElementById('stDist').value;
+  const t=document.getElementById('stType').value;
+  let list=DB.stations.filter(s=>(d==='全部'||s.dist===d)&&(t==='全部'||s.type===t));
+  const ps=pageState.station;
+  document.getElementById('stCnt').textContent=list.length+'座';
+  const total=Math.max(1,Math.ceil(list.length/ps.size));
+  if(ps.page>total)ps.page=total;
+  const slice=list.slice((ps.page-1)*ps.size,ps.page*ps.size);
+  const tb=document.getElementById('stTbody');
+  if(!slice.length)tb.innerHTML='<tr><td colspan="7"><div class="empty">暂无符合条件的场站</div></td></tr>';
+  else tb.innerHTML=slice.map(s=>{const i=DB.stations.indexOf(s);return `<tr style="cursor:pointer" onclick="stationDetail(${i})">
+    <td class="mono">${s.id}</td><td>${s.name}</td><td>${s.type}</td>
+    <td>${s.dist}</td><td class="mono">${s.press}</td><td>${s.head}</td>
+    <td>${s.status==='正常'?tag('正常','蓝'):tag('关注','黄')}</td></tr>`}).join('');
+  document.getElementById('stPager').innerHTML=makePager(ps.page,total,'stationGoto');
+}
+function stationGoto(p){pageState.station.page=p;renderStation()}
+function stationReset(){pageState.station.page=1;renderStation()}
+function stationDetail(i){
+  const s=DB.stations[i];
+  const rel=DB.pipelines.filter(p=>p.dist===s.dist);
+  openDrawer('场站档案 · '+s.name,`<div class="field"><div class="k">场站编号</div><div class="v mono">${s.id}</div></div>
+    <div class="field"><div class="k">名称</div><div class="v">${s.name}</div></div>
+    <div class="field"><div class="k">类型</div><div class="v">${s.type}</div></div>
+    <div class="field"><div class="k">所在区县</div><div class="v">${s.dist}</div></div>
+    <div class="field"><div class="k">运行压力</div><div class="v mono">${s.press}</div></div>
+    <div class="field"><div class="k">负责人</div><div class="v">${s.head}</div></div>
+    <div class="field"><div class="k">运行状态</div><div class="v">${s.status==='正常'?'<span class="t-ok">● 正常</span>':'<span class="t-warn">● 关注</span>'}</div></div>
+    <div class="field"><div class="k">关联管线</div><div class="v">${rel.length?rel.map(p=>`<div class="mono fz12 mt4">${p.id} · ${p.mat} ${p.dia} ${p.len}km</div>`).join(''):'<span class="t-dim">暂无</span>'}</div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+// ====== 危险源详情 ======
+function hazardDetail(i){
+  const h=hazardSrc[i];
+  openDrawer('危险源 · '+h.name,`<div class="field"><div class="k">编号</div><div class="v mono">${h.id}</div></div>
+    <div class="field"><div class="k">名称</div><div class="v">${h.name}</div></div>
+    <div class="field"><div class="k">类型</div><div class="v">${h.type}</div></div>
+    <div class="field"><div class="k">等级</div><div class="v">${lvlTag(h.lvl)}</div></div>
+    <div class="field"><div class="k">所在区县</div><div class="v">${h.dist}</div></div>
+    <div class="field"><div class="k">描述</div><div class="v">${h.desc}</div></div>
+    <div class="field"><div class="k">管控措施</div><div class="v">${h.lvl==='红'?'实时监测，定期安全评估，应急资源前置':h.lvl==='橙'?'加密巡查，定期检测，制定预案':'常态监测，定期复查'}</div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+// ====== 防护目标 ======
+function renderProtect(){
+  const d=document.getElementById('ptDist').value;
+  let list=protectTargets.filter(t=>d==='全部'||t.dist===d);
+  const tb=document.getElementById('ptTbody');
+  if(!list.length)tb.innerHTML='<tr><td colspan="5"><div class="empty">暂无防护目标</div></td></tr>';
+  else tb.innerHTML=list.map(t=>{const i=protectTargets.indexOf(t);return `<tr style="cursor:pointer" onclick="protectDetail(${i})">
+    <td class="mono">${t.id}</td><td>${t.name}</td><td>${t.type}</td>
+    <td class="mono ${parseInt(t.gap)<100?'t-danger':'t-sub'}">${t.gap}</td><td>${t.dist}</td></tr>`}).join('');
+}
+function protectDetail(i){
+  const t=protectTargets[i];
+  openDrawer('防护目标 · '+t.name,`<div class="field"><div class="k">编号</div><div class="v mono">${t.id}</div></div>
+    <div class="field"><div class="k">名称</div><div class="v">${t.name}</div></div>
+    <div class="field"><div class="k">类型</div><div class="v">${t.type}</div></div>
+    <div class="field"><div class="k">距管网距离</div><div class="v mono ${parseInt(t.gap)<100?'t-danger':''}">${t.gap}</div></div>
+    <div class="field"><div class="k">所在区县</div><div class="v">${t.dist}</div></div>
+    <div class="field"><div class="k">防护要求</div><div class="v">${parseInt(t.gap)<100?'<span class="t-danger">距离不足，重点防护</span>':'符合安全间距，常规巡查'}</div></div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+function showOnMap(){
+  openDrawer('防护目标分布图',
+    `<div style="position:relative;height:340px;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;margin-bottom:10px">
+      <div id="drLeafMap" style="position:absolute;inset:0;z-index:1"></div>
+      <div id="drLayerCtrl" class="map-ctrl" style="position:absolute;right:10px;top:10px;z-index:500"></div>
+    </div>
+    <div class="flex gap12 mt8 fz12">
+      <span class="t-sub"><i style="background:#22C55E;border-radius:50%;width:8px;height:8px;display:inline-block;margin-right:6px"></i>安全间距(≥100m)</span>
+      <span class="t-sub"><i style="background:#FF4D5E;border-radius:50%;width:8px;height:8px;display:inline-block;margin-right:6px"></i>距离不足(&lt;100m)</span>
+    </div>
+    <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+  // 抽屉 DOM 挂载后延迟初始化地图
+  setTimeout(()=>{
+    const m=initGasMap('drLeafMap',{theme:'risk',showLayers:{pipe:true,station:true,alarm:false,hazard:true,protect:true}});
+    if(m){m.renderLayerCtrl('drLayerCtrl');setTimeout(()=>m.map.invalidateSize(),100)}
+  },260);
+}
+
+// ====== 新增表单 ======
+function newPipeline(){
+  openDrawer('新增管线档案',`<div class="field"><div class="k">管线编号</div><div class="v"><input class="inp" type="text" placeholder="如 GP-013"></div></div>
+    <div class="field"><div class="k">材质</div><div class="v"><select class="sel" style="width:100%"><option>PE</option><option>钢管</option></select></div></div>
+    <div class="field"><div class="k">管径</div><div class="v"><input class="inp" type="text" placeholder="如 DE160"></div></div>
+    <div class="field"><div class="k">长度(km)</div><div class="v"><input class="inp" type="number" placeholder="如 12.4"></div></div>
+    <div class="field"><div class="k">压力级制</div><div class="v"><select class="sel" style="width:100%"><option>低压</option><option>中压</option><option>次高压</option><option>高压</option></select></div></div>
+    <div class="field"><div class="k">敷设年代</div><div class="v"><input class="inp" type="text" placeholder="如 2024"></div></div>
+    <div class="field"><div class="k">所在区县</div><div class="v"><select class="sel" style="width:100%">${DB.districts.map(d=>`<option>${d}</option>`).join('')}</select></div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer()">保存</button></div>`);
+}
+function newStation(){
+  openDrawer('新增场站档案',`<div class="field"><div class="k">场站编号</div><div class="v"><input class="inp" type="text" placeholder="如 MS-13"></div></div>
+    <div class="field"><div class="k">名称</div><div class="v"><input class="inp" type="text" placeholder="如 XX调压站"></div></div>
+    <div class="field"><div class="k">类型</div><div class="v"><select class="sel" style="width:100%"><option>门站</option><option>调压站</option><option>储备站</option></select></div></div>
+    <div class="field"><div class="k">所在区县</div><div class="v"><select class="sel" style="width:100%">${DB.districts.map(d=>`<option>${d}</option>`).join('')}</select></div></div>
+    <div class="field"><div class="k">运行压力</div><div class="v"><input class="inp" type="text" placeholder="如 0.40MPa"></div></div>
+    <div class="field"><div class="k">负责人</div><div class="v"><input class="inp" type="text" placeholder="如 张三"></div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer()">保存</button></div>`);
+}
+
+// ====== 安全启动：try/catch 包裹，Leaflet 未就绪时先渲染表格 ======
+(function safeBoot(){
+  function bootErr(msg){
+    var tb=document.getElementById('tabBody');if(!tb)return;
+    tb.innerHTML='<div class="panel flex-1" style="margin:12px 0 0 0"><div class="panel-h"><span class="t" style="color:#FF4D5E">⚠ 初始化异常</span></div><div class="panel-b"><div style="padding:24px;color:#FBBF24;line-height:2;font-size:13px">'+msg+'</div></div></div>';
+    console.error('[basic] boot fail:',msg);
+  }
+
+  // 1. Tab 切换绑定
+  try{
+    document.querySelectorAll('#bTabs button').forEach(function(b){
+      b.onclick=function(){
+        document.querySelectorAll('#bTabs button').forEach(function(x){x.classList.remove('on')});
+        this.classList.add('on');
+        try{renderTab(this.dataset.tab)}catch(e){bootErr('Tab渲染失败：'+(e&&e.message||e))}
+      };
+    });
+  }catch(e){bootErr('导航绑定失败：'+(e&&e.message||e));return}
+
+  // 2. 首屏渲染（L未就绪时跳过地图，仅渲染表格）
+  try{
+    if(typeof L==='undefined'){
+      var origEns=window.ensureBasicMap;
+      window.ensureBasicMap=function(){};
+      renderTab('pipe');
+      var w=0;
+      (function pollL(){
+        if(typeof L!=='undefined'){
+          window.ensureBasicMap=origEns;
+          try{ensureBasicMap('pipe')}catch(_){}
+        }else if(w<8000){w+=250;setTimeout(pollL,250)}
+      })();
+    }else{
+      renderTab('pipe');
+    }
+  }catch(e){bootErr('首屏渲染失败：'+(e&&e.message||e))}
+
+  // 3. 底部统计
+  try{
+    var lenSum=DB.pipelines.reduce(function(s,p){return s+p.len},0).toFixed(1);
+    document.getElementById('lenStat').innerHTML=
+      '<div class="flex aic jcb"><span class="t-sub">管网总长</span><span class="mono t-accent fz20">'+fmt(DB.kpi.pipe.val)+'</span></div>'+
+      '<div class="flex aic jcb mt8"><span class="t-sub">档案管线</span><span class="mono">'+DB.pipelines.length+' 条</span></div>'+
+      '<div class="flex aic jcb mt8"><span class="t-sub">示例总长</span><span class="mono">'+lenSum+' km</span></div>'+
+      '<div class="bar mt8"><i style="width:85%"></i></div>'+
+      '<div class="fz12 t-sub mt8">档案完整度 85%</div>';
+    var matAgg={};DB.pipelines.forEach(function(p){matAgg[p.mat]=(matAgg[p.mat]||0)+1});
+    var matColors=['#22D3EE','#7C3AED','#FBBF24'];
+    try{donut(document.getElementById('matDonut'),Object.entries(matAgg).map(function(e,i){return{v:e[1],color:matColors[i]}}))}catch(_){}
+    document.getElementById('matLegend').innerHTML=Object.entries(matAgg).map(function(e,i){
+      return '<div class="flex jcb fz12 mt8"><span class="t-sub"><i style="width:8px;height:8px;border-radius:50%;background:'+matColors[i]+';display:inline-block;margin-right:6px"></i>'+e[0]+'</span><span class="mono">'+e[1]+'条</span></div>';
+    }).join('');
+    var yearRange={'2012-2015':0,'2016-2018':0,'2019-2021':0};
+    DB.pipelines.forEach(function(p){var y=+p.year;if(y<=2015)yearRange['2012-2015']++;else if(y<=2018)yearRange['2016-2018']++;else yearRange['2019-2021']++});
+    try{barChart(document.getElementById('yearBar'),Object.values(yearRange),Object.keys(yearRange))}catch(_){}
+  }catch(ee){console.warn('[basic] stats minor:',ee)}
+})();
+</script>
+</body>
+</html>

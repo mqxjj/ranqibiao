@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>辅助管理 - 某某智慧燃气监管</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+.tab-pane{display:none}.tab-pane.on{display:block}
+.dim-card{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:.2s}
+.dim-card:hover{border-color:var(--accent);box-shadow:0 0 14px rgba(34,211,238,.18);transform:translateY(-1px)}
+.dim-card .di{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;color:#04122A;flex:0 0 40px}
+.dim-card .di svg{width:20px;height:20px}
+.dim-card .dt{font-size:14px;font-weight:600;color:var(--text)}
+.dim-card .dd{font-size:11px;color:var(--sub);margin-top:2px}
+.know-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:8px;cursor:pointer;transition:.2s}
+.know-item:hover{border-color:var(--accent);box-shadow:0 0 10px rgba(34,211,238,.15)}
+.know-item .ki{width:32px;height:32px;border-radius:6px;background:rgba(124,58,237,.18);display:flex;align-items:center;justify-content:center;color:var(--accent2);flex:0 0 32px}
+.know-item .ki svg{width:16px;height:16px}
+.know-item .kn{flex:1}
+.know-item .kn .t{font-size:13px;color:var(--text)}
+.know-item .kn .s{font-size:11px;color:var(--sub);margin-top:2px}
+.know-item .kt{font-size:10px}
+.tree-node{padding:6px 0 6px 14px;font-size:13px;color:var(--sub);cursor:pointer;border-left:1px dashed rgba(34,211,238,.12);margin-left:6px;transition:.2s}
+.tree-node:hover{color:var(--accent3)}
+.tree-node.parent{color:var(--text);font-weight:600;border-left-color:var(--accent);margin-left:0;padding-left:14px}
+.tree-node .cnt{float:right;font-size:10px;color:var(--dim);font-family:var(--mono)}
+.case-card{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:14px;cursor:pointer;transition:.2s;margin-bottom:10px}
+.case-card:hover{border-color:var(--accent);box-shadow:0 0 12px rgba(34,211,238,.18);transform:translateY(-1px)}
+.case-card .ct{font-size:14px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.case-card .cm{display:flex;gap:8px;margin-bottom:6px}
+.case-card .cd{font-size:12px;color:var(--sub);line-height:1.6}
+.exp-card{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:14px;cursor:pointer;transition:.2s;margin-bottom:10px}
+.exp-card:hover{border-color:var(--accent);box-shadow:0 0 12px rgba(34,211,238,.18)}
+.exp-card .et{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.exp-card .ei{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#04122A;flex:0 0 44px}
+.exp-card .en{font-size:14px;font-weight:600}
+.exp-card .ep{font-size:11px;color:var(--sub);margin-top:2px}
+.quick-entry{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:.2s;margin-bottom:8px}
+.quick-entry:hover{border-color:var(--accent);background:rgba(34,211,238,.06);transform:translateX(2px)}
+.quick-entry .qi{width:30px;height:30px;border-radius:8px;background:rgba(34,211,238,.12);display:flex;align-items:center;justify-content:center;color:var(--accent);flex:0 0 30px}
+.quick-entry .qi svg{width:16px;height:16px}
+.quick-entry .qt{flex:1;font-size:13px}
+.stat-mini{display:flex;align-items:center;gap:10px;padding:12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm)}
+.stat-mini .si{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:0 0 36px}
+.stat-mini .si svg{width:18px;height:18px}
+.stat-mini .sv{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent3)}
+.stat-mini .sl{font-size:11px;color:var(--sub)}
+.search-box{width:100%;padding:8px 12px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:var(--r-sm);font-size:13px;font-family:var(--sans);outline:none}
+.search-box:focus{border-color:var(--accent);box-shadow:0 0 8px rgba(34,211,238,.2)}
+</style>
+</head>
+<body data-page="auxiliary">
+<div class="bg-atmos"></div>
+<header class="topbar"><span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span><div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div><div class="crumb">监管应用 / <b>辅助管理</b></div><div class="sp"></div><div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div></header>
+<aside class="sidenav" id="nav"></aside>
+<main class="main">
+<!-- 两维度说明卡 -->
+<div class="grid g-2" style="margin-bottom:14px">
+  <div class="dim-card" data-r="0" onclick="location.href='emergency.html'">
+    <div class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z M13 3v8h6"/></svg></div>
+    <div><div class="dt">突发事件应急处置</div><div class="dd">事故接报 · 应急调度 · 现场处置 · 总结评估</div></div>
+  </div>
+  <div class="dim-card" data-r="60" onclick="location.href='monitor.html'">
+    <div class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></div>
+    <div><div class="dt">日常监管</div><div class="dd">巡查巡检 · 隐患管理 · 投诉处置 · 考核评价</div></div>
+  </div>
+</div>
+
+<div class="tabbar" id="atab">
+  <button class="on" data-tab="know">知识库</button>
+  <button data-tab="case">案例库</button>
+  <button data-tab="exp">专家库</button>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr 320px">
+  <!-- 左：tab 内容 -->
+  <div>
+    <!-- 知识库 -->
+    <div class="tab-pane on" data-pane="know">
+      <div class="panel" data-r="100">
+        <div class="panel-h"><span class="t">知识库检索</span><span class="more">法规·规范·导则</span></div>
+        <div class="panel-b">
+          <div class="toolbar">
+            <input class="search-box" id="knowSearch" placeholder="搜索法规、规范、导则..." style="flex:1">
+            <button class="btn primary" onclick="searchKnow()">检索</button>
+          </div>
+          <div class="grid" style="grid-template-columns:1fr 200px;gap:14px">
+            <div id="knowList"></div>
+            <div>
+              <div class="fz12 t-sub fw6" style="margin-bottom:8px">知识分类</div>
+              <div id="knowTree"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 案例库 -->
+    <div class="tab-pane" data-pane="case">
+      <div class="panel" data-r="100">
+        <div class="panel-h"><span class="t">案例库</span><span class="more">事故处置参考</span></div>
+        <div class="panel-b" id="caseList"></div>
+      </div>
+    </div>
+    <!-- 专家库 -->
+    <div class="tab-pane" data-pane="exp">
+      <div class="panel" data-r="100">
+        <div class="panel-h"><span class="t">专家库</span><span class="more">技术咨询</span></div>
+        <div class="panel-b" id="expList"></div>
+      </div>
+    </div>
+  </div>
+  <!-- 右：辅助支持 + 快速入口 -->
+  <div class="fcol gap12">
+    <div class="panel" data-r="160">
+      <div class="panel-h"><span class="t">辅助支持说明</span></div>
+      <div class="panel-b">
+        <div class="fz12" style="color:var(--sub);line-height:1.8">
+          科学指导燃气安全监管工作，知识库、案例库、专家库三大资源为<b class="t-accent">应急处置</b>与<b class="t-accent">日常监管</b>提供全方位支撑：
+        </div>
+        <div class="mt8 fz12" style="color:var(--sub);line-height:1.8">
+          · 知识库：法规规范导则，依法监管依据<br>
+          · 案例库：典型事故处置，经验借鉴参考<br>
+          · 专家库：专业技术咨询，决策支持保障
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-r="220">
+      <div class="panel-h"><span class="t">快速入口</span></div>
+      <div class="panel-b" id="quickList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 底部：知识统计 -->
+<div class="grid g-4 mt12" id="statGrid"></div>
+</main>
+<script src="mock.js"></script>
+<script src="shell.js"></script>
+<script src="map.js"></script>
+<script>
+/* ====== 知识库 ====== */
+const KNOW_ITEMS=[
+  {t:'城镇燃气管理条例',s:'国务院令 第583号 · 行政法规',cat:'法规',icon:'M4 5h16M4 5v14a1 1 0 001 1h14a1 1 0 001-1V5M4 5l1-2h14l1 2M9 9h6'},
+  {t:'GB50028 城镇燃气设计规范',s:'国家标准 · 2006版',cat:'规范',icon:'M4 19.5A2.5 2.5 0 016.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z'},
+  {t:'CJJ51 城镇燃气设施运行维护',s:'行业标准 · 行业规程',cat:'规范',icon:'M2 8l10-6 10 6-10 6L2 8z M2 14l10 6 10-6'},
+  {t:'燃气应急预案编制导则',s:'编制指南 · 应急管理',cat:'导则',icon:'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'},
+];
+const KNOW_TREE=[
+  {t:'法规',cnt:1,parent:true},
+  {t:'行政法规',cnt:1},
+  {t:'规范',cnt:2,parent:true},
+  {t:'国家标准',cnt:1},
+  {t:'行业标准',cnt:1},
+  {t:'导则',cnt:1,parent:true},
+  {t:'编制指南',cnt:1},
+];
+function renderKnow(filter){
+  const list=filter?KNOW_ITEMS.filter(k=>k.t.includes(filter)||k.s.includes(filter)):KNOW_ITEMS;
+  document.getElementById('knowList').innerHTML=list.length?list.map((k,i)=>`
+    <div class="know-item" onclick="openKnowDetail(${i})">
+      <div class="ki">${svgIcon(k.icon,16,16)}</div>
+      <div class="kn"><div class="t">${k.t}</div><div class="s">${k.s}</div></div>
+      <span class="tag info kt">${k.cat}</span>
+    </div>`).join(''):'<div class="empty">未找到相关知识</div>';
+}
+renderKnow();
+document.getElementById('knowTree').innerHTML=KNOW_TREE.map(n=>`<div class="tree-node ${n.parent?'parent':''}">${n.t}<span class="cnt">${n.cnt}</span></div>`).join('');
+document.getElementById('knowSearch').oninput=function(){renderKnow(this.value);};
+function searchKnow(){renderKnow(document.getElementById('knowSearch').value);}
+
+/* ====== 案例库 ====== */
+const CASES=[
+  {t:'2019·某市第三方施工挖断中压管',type:'第三方破坏',lvl:'红',time:'2019.06',brief:'某市道路施工挖掘机挖断中压燃气管道，导致大量泄漏并引发火灾，周边2000户停气。',
+    detail:{process:'6月15日14:30，道路施工挖掘机挖断DE160中压PE管，燃气大量泄漏并起火。消防15:00到场扑灭明火，燃气公司关闭上下游阀门。',handle:'①紧急停气降压 ②现场警戒疏散 ③抢修队更换破损管段 ④恢复供气 ⑤事故调查',lesson:'加强施工前管线交底，施工区域增设电子围栏与物联监测，第三方施工须全程旁站监护。'}},
+  {t:'2021·某小区入户管腐蚀泄漏',type:'管道腐蚀',lvl:'橙',time:'2021.03',brief:'老旧小区入户镀锌钢管腐蚀穿孔，室内燃气浓度超标，住户报警，及时处置未造成伤亡。',
+    detail:{process:'3月2日居民闻到燃气味报警，安检员携带检测仪入户，测得浓度0.8%LEL，定位入户管穿墙处腐蚀穿孔。',handle:'①关闭户内总阀 ②开窗通风 ③更换不锈钢波纹管 ④对该小区入户管全面排查',lesson:'老旧小区入户管应纳入定期更换计划，推广不锈钢波纹管，加装家用报警器。'}},
+  {t:'2023·调压站法兰渗漏处置',type:'设备故障',lvl:'橙',time:'2023.09',brief:'调压站法兰垫片老化渗漏，在线监测压力异常报警，运维人员及时处置避免扩散。',
+    detail:{process:'9月10日调压站压力变送器报警，运维人员到场检查发现出口法兰垫片老化渗漏，浓度达到15%LEL。',handle:'①切换备用调压路 ②关闭渗漏法兰上下游阀 ③更换金属环连接垫片 ④恢复调压路',lesson:'调压站法兰垫片应纳入定期更换台账，关键法兰加装在线泄漏监测。'}},
+];
+document.getElementById('caseList').innerHTML=CASES.map((c,i)=>`
+  <div class="case-card" onclick="openCaseDetail(${i})">
+    <div class="ct">${lvlTag(c.lvl)} ${c.t}</div>
+    <div class="cm"><span class="tag info">${c.type}</span><span class="mono fz12 t-sub">${c.time}</span></div>
+    <div class="cd">${c.brief}</div>
+    <div class="mt8 flex jcb aic"><span class="t-sub fz12">点击查看详情</span><span class="btn primary">查看详情</span></div>
+  </div>`).join('');
+
+/* ====== 专家库 ====== */
+const EXPERTS=DB.emergency.experts.map(e=>({n:e.n,t:e.t,o:e.o}));
+document.getElementById('expList').innerHTML=EXPERTS.map((e,i)=>`
+  <div class="exp-card" onclick="openExpDetail(${i})">
+    <div class="et">
+      <div class="ei">${e.n.charAt(0)}</div>
+      <div><div class="en">${e.n}</div><div class="ep">${e.t} · ${e.o}</div></div>
+    </div>
+    <div class="cd fz12 t-sub">擅长领域：${e.t}，长期从事燃气安全监管与技术咨询</div>
+    <div class="mt8 flex jcb aic"><span class="t-sub fz12">点击查看详情</span><span class="btn primary">联系专家</span></div>
+  </div>`).join('');
+
+/* ====== 快速入口 ====== */
+const QUICK=[
+  {t:'应急处置',d:'事故接报与调度',href:'emergency.html',icon:'M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z M13 3v8h6'},
+  {t:'预测预警',d:'风险趋势研判',href:'warning.html',icon:'M12 2v4M12 18v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M2 12h4M18 12h4'},
+  {t:'泄漏研判',d:'扩散溯源分析',href:'leak.html',icon:'M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z'},
+];
+document.getElementById('quickList').innerHTML=QUICK.map(q=>`
+  <div class="quick-entry" onclick="location.href='${q.href}'">
+    <div class="qi">${svgIcon(q.icon,16,16)}</div>
+    <div class="qt">${q.t}<div class="t-sub fz11">${q.d}</div></div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--sub)"><path d="M9 18l6-6-6-6"/></svg>
+  </div>`).join('');
+
+/* ====== 知识统计 ====== */
+const STATS=[
+  {t:'法规数',v:1,u:'部',c:'#22D3EE',icon:'M4 5h16M4 5v14a1 1 0 001 1h14a1 1 0 001-1V5M4 5l1-2h14l1 2M9 9h6'},
+  {t:'规范数',v:2,u:'项',c:'#7C3AED',icon:'M4 19.5A2.5 2.5 0 016.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z'},
+  {t:'案例数',v:3,u:'例',c:'#FBBF24',icon:'M2 8l10-6 10 6-10 6L2 8z M2 14l10 6 10-6'},
+  {t:'专家数',v:4,u:'位',c:'#22C55E',icon:'M12 2a7 7 0 100 14 7 7 0 000-14z M12 2a5 5 0 00-5 5 M16 17l5 5'},
+];
+document.getElementById('statGrid').innerHTML=STATS.map(s=>`
+  <div class="stat-mini">
+    <div class="si" style="color:${s.c};background:${s.c}22">${svgIcon(s.icon,18,18)}</div>
+    <div><div class="sv">${s.v}<span style="font-size:12px;color:var(--sub);font-weight:400">${s.u}</span></div><div class="sl">${s.t}</div></div>
+  </div>`).join('');
+
+/* ====== Tab 切换 ====== */
+document.querySelectorAll('#atab button').forEach(b=>{
+  b.onclick=()=>{document.querySelectorAll('#atab button').forEach(x=>x.classList.remove('on'));b.classList.add('on');document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));document.querySelector('.tab-pane[data-pane="'+b.dataset.tab+'"]').classList.add('on');};
+});
+
+/* ====== 抽屉：知识详情 ====== */
+function openKnowDetail(i){
+  const k=KNOW_ITEMS[i];
+  openDrawer('知识详情 · '+k.t,`
+    <div class="field"><div class="k">名称</div><div class="v">${k.t}</div></div>
+    <div class="field"><div class="k">分类</div><div class="v"><span class="tag info">${k.cat}</span></div></div>
+    <div class="field"><div class="k">来源</div><div class="v">${k.s}</div></div>
+    <div class="field"><div class="k">适用范围</div><div class="v t-sub fz12">城镇燃气规划、设计、施工、运行、维护及应急管理的全生命周期</div></div>
+    <div class="field"><div class="k">核心内容</div><div class="v t-sub fz12">燃气设施建设标准、安全间距要求、运行维护规程、应急处置规范等关键技术指标</div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button><button class="btn primary" onclick="closeDrawer()">下载原文</button></div>`);
+}
+
+/* ====== 抽屉：案例详情 ====== */
+function openCaseDetail(i){
+  const c=CASES[i];
+  openDrawer('案例详情 · '+c.t,`
+    <div class="field"><div class="k">案例名称</div><div class="v">${c.t}</div></div>
+    <div class="field"><div class="k">类型</div><div class="v"><span class="tag info">${c.type}</span> ${lvlTag(c.lvl)}</div></div>
+    <div class="field"><div class="k">时间</div><div class="v mono">${c.time}</div></div>
+    <div class="field"><div class="k">摘要</div><div class="v">${c.brief}</div></div>
+    <div class="field"><div class="k">事故经过</div><div class="v t-sub fz12">${c.detail.process}</div></div>
+    <div class="field"><div class="k">处置措施</div><div class="v t-sub fz12">${c.detail.handle}</div></div>
+    <div class="field"><div class="k">经验教训</div><div class="v" style="color:var(--warn)">${c.detail.lesson}</div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button><button class="btn primary" onclick="closeDrawer()">收藏案例</button></div>`);
+}
+
+/* ====== 抽屉：专家详情 ====== */
+function openExpDetail(i){
+  const e=EXPERTS[i];
+  openDrawer('专家信息 · '+e.n,`
+    <div class="field"><div class="k">姓名</div><div class="v">${e.n}</div></div>
+    <div class="field"><div class="k">专业领域</div><div class="v">${e.t}</div></div>
+    <div class="field"><div class="k">所属单位</div><div class="v">${e.o}</div></div>
+    <div class="field"><div class="k">联系方式</div><div class="v mono">${'1'+'3'.repeat(2)+'-'+e.n.charCodeAt(0)%10+'***'+(e.n.charCodeAt(1)%10)+'***'}</div></div>
+    <div class="field"><div class="k">擅长领域</div><div class="v t-sub fz12">${e.t}，长期从事燃气安全监管与技术咨询，参与多起事故调查与应急处置</div></div>
+    <div class="field"><div class="k">咨询方式</div><div class="v">电话咨询 / 视频会议 / 现场指导</div></div>
+    <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button><button class="btn primary" onclick="closeDrawer()">发起咨询</button></div>`);
+}
+</script>
+</body>
+</html>

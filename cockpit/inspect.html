@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>巡查巡检 - 某某智慧燃气监管</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+.tab-pane{display:none}.tab-pane.on{display:block}
+.flow-wrap{display:flex;align-items:stretch;gap:0;padding:18px 8px;overflow-x:auto}
+.flow-step{flex:1;min-width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:14px 12px;cursor:pointer;transition:.2s;position:relative}
+.flow-step:hover{border-color:var(--accent);box-shadow:0 0 14px rgba(34,211,238,.22);transform:translateY(-2px)}
+.flow-step .sn{font-family:var(--mono);font-size:11px;color:var(--accent3);margin-bottom:6px}
+.flow-step .st{font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}
+.flow-step .sd{font-size:11px;color:var(--sub);line-height:1.5}
+.flow-step .si{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;color:#04122A;margin-bottom:8px}
+.flow-step .si svg{width:16px;height:16px}
+.flow-arrow{flex:0 0 24px;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.6}
+.flow-step.done{border-color:rgba(34,197,94,.5)}
+.flow-step.done .si{background:linear-gradient(135deg,#22C55E,#16A34A)}
+.flow-step.cur{border-color:var(--warn);box-shadow:0 0 14px rgba(251,191,36,.25)}
+.flow-step.cur .si{background:linear-gradient(135deg,#FBBF24,#F97316)}
+.case-card{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:14px;cursor:pointer;transition:.2s;margin-bottom:10px}
+.case-card:hover{border-color:var(--accent);box-shadow:0 0 12px rgba(34,211,238,.18);transform:translateY(-1px)}
+.case-card .ct{font-size:14px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.case-card .cd{font-size:12px;color:var(--sub);line-height:1.6}
+</style>
+</head>
+<body data-page="inspect">
+<div class="bg-atmos"></div>
+<header class="topbar"><span class="back" onclick="location.href='index.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg> 返回驾驶舱</span><div class="brand"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2c-3 4-6 7-6 11a6 6 0 0012 0c0-4-3-7-6-11z"/><path d="M12 18v3M9 21h6"/></svg> 智慧燃气监管</div><div class="crumb">监管应用 / <b>巡查巡检</b></div><div class="sp"></div><div class="rt"><span class="stat"><span class="dot ok"></span>系统正常</span><span class="clk">--</span><span>值守：住建局</span></div></header>
+<aside class="sidenav" id="nav"></aside>
+<main class="main">
+<div class="tabbar" id="tabbar">
+  <button class="on" data-tab="cycle">检查周期</button>
+  <button data-tab="content">作业内容</button>
+  <button data-tab="flow">作业流程</button>
+  <button data-tab="plan">安检计划</button>
+</div>
+<div class="grid" style="grid-template-columns:1fr 360px">
+  <div>
+    <div class="tab-pane on" data-pane="cycle">
+      <div class="panel" data-r="0">
+        <div class="panel-h"><span class="t">入户检查周期设置</span><span class="more">周期管理</span></div>
+        <div class="panel-b">
+          <div class="toolbar"><span class="t-sub fz12">共 <b class="t-accent mono">6</b> 条周期配置</span><span class="sp"></span><button class="btn primary" onclick="openCycleForm()">新增周期</button></div>
+          <table class="tbl"><thead><tr><th>区域</th><th>周期名称</th><th>周期类型</th><th>检查项目</th><th>有效期</th><th>状态</th><th>操作</th></tr></thead><tbody id="cycleBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane" data-pane="content">
+      <div class="panel" data-r="60">
+        <div class="panel-h"><span class="t">作业内容设置</span><span class="more">内容管理</span></div>
+        <div class="panel-b">
+          <div class="toolbar"><span class="t-sub fz12">共 <b class="t-accent mono">5</b> 类作业内容</span><span class="sp"></span><button class="btn primary" onclick="openContentForm()">新增内容</button></div>
+          <table class="tbl"><thead><tr><th>序号</th><th>作业内容</th><th>检查范围</th><th>适用周期</th><th>项目数</th><th>更新时间</th><th>操作</th></tr></thead><tbody id="contentBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane" data-pane="flow">
+      <div class="panel" data-r="120">
+        <div class="panel-h"><span class="t">作业流程设置</span><span class="more">流程编排</span></div>
+        <div class="panel-b">
+          <div class="t-sub fz12" style="margin:8px 0 10px">点击节点查看节点详情与表单字段</div>
+          <div class="flow-wrap" id="flowWrap"></div>
+          <div class="mt12" style="border:1px dashed var(--line);border-radius:var(--r-sm);padding:12px">
+            <div class="fz12 t-sub" style="margin-bottom:6px">流程说明</div>
+            <div class="fz12" style="line-height:1.8;color:var(--sub)">标准作业流程共 <b class="t-accent mono">6</b> 个节点：派单（系统/人工）→ 接单（责任单位签收）→ 现场检查（按作业内容逐项）→ 问题上报（实时回传）→ 整改（限期处置）→ 验收（闭环归档）。各节点支持自定义表单、超时升级、影像留痕。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane" data-pane="plan">
+      <div class="panel" data-r="180">
+        <div class="panel-h"><span class="t">安检计划分派</span><span class="more">分派管理</span></div>
+        <div class="panel-b">
+          <div class="toolbar"><span class="t-sub fz12">共 <b class="t-accent mono" id="planCnt">0</b> 个在执行计划</span><span class="sp"></span><button class="btn" onclick="exportPlan()">导出</button><button class="btn primary" onclick="openDispatch()">分派计划</button></div>
+          <table class="tbl"><thead><tr><th>计划ID</th><th>计划名</th><th>区域</th><th>周期</th><th>目标数</th><th>已完成</th><th>完成率</th><th>状态</th><th>操作</th></tr></thead><tbody id="planBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="fcol gap12">
+    <div class="panel" data-r="40">
+      <div class="panel-h"><span class="t">整体完成率</span></div>
+      <div class="panel-b flex aic jcb gap12">
+        <div class="donut" style="width:100px;height:100px"><canvas id="totalDonut" style="width:100px;height:100px"></canvas><div class="cap"><div class="v" id="totalRate">0%</div><div class="l">综合完成</div></div></div>
+        <div style="flex:1">
+          <div class="flex jcb fz12"><span class="t-sub">目标总数</span><span class="mono t-accent" id="sumTarget">0</span></div>
+          <div class="flex jcb fz12 mt8"><span class="t-sub">已完成</span><span class="mono t-ok" id="sumDone">0</span></div>
+          <div class="flex jcb fz12 mt8"><span class="t-sub">未完成</span><span class="mono t-warn" id="sumLeft">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-r="100">
+      <div class="panel-h"><span class="t">各区完成率统计</span></div>
+      <div class="panel-b">
+        <canvas id="distChart" style="width:100%;height:130px"></canvas>
+        <div class="mt8" id="distLegend"></div>
+      </div>
+    </div>
+    <div class="panel flex-1" data-r="160">
+      <div class="panel-h"><span class="t">疑难案件清单</span><span class="more">待时机</span></div>
+      <div class="panel-b" id="caseList"></div>
+    </div>
+  </div>
+</div>
+</main>
+<script src="mock.js"></script>
+<script src="shell.js"></script>
+<script src="map.js"></script>
+<script>
+const CYCLES=[
+  {area:'宁江区',name:'宁江区入户月检',type:'月',items:'室内安检12项',term:'2026.01-12',state:'启用'},
+  {area:'前郭县',name:'前郭县管线季检',type:'季',items:'管线巡查8项',term:'2026.Q1-Q4',state:'启用'},
+  {area:'长岭县',name:'长岭县阀井月检',type:'月',items:'阀井检查10项',term:'2026.01-12',state:'启用'},
+  {area:'乾安县',name:'乾安县企业季检',type:'季',items:'场站检查15项',term:'2026.Q1-Q4',state:'启用'},
+  {area:'扶余市',name:'扶余市隐患月查',type:'月',items:'隐患复查6项',term:'2026.01-12',state:'启用'},
+  {area:'宁江区',name:'宁江区年度复查',type:'年',items:'综合复查20项',term:'2026年度',state:'停用'},
+];
+const CONTENTS=[
+  {n:'入户安检内容',range:'室内管道/燃气表/报警器/灶具/阀门',period:'月',items:12,time:'2026-08-20'},
+  {n:'管线巡查内容',range:'中低压管线/标识标牌/占压/腐蚀',period:'季',items:8,time:'2026-08-15'},
+  {n:'阀井检查内容',range:'阀门/法兰/井盖/积水/渗漏',period:'月',items:10,time:'2026-08-18'},
+  {n:'场站检查内容',range:'工艺设备/仪表/消防/应急物资',period:'季',items:15,time:'2026-08-10'},
+  {n:'用户端检查内容',range:'灶具/软管/热水器/通风条件',period:'月',items:6,time:'2026-08-22'},
+];
+const FLOW=[
+  {n:'01',t:'派单',d:'系统按周期自动派单或人工下达',icon:'M5 12h14M13 6l6 6-6 6',state:'done'},
+  {n:'02',t:'接单',d:'责任单位签收并指派作业人员',icon:'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11',state:'done'},
+  {n:'03',t:'现场检查',d:'按作业内容逐项检查并影像留痕',icon:'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z M12 9a3 3 0 100 6 3 3 0 000-6z',state:'cur'},
+  {n:'04',t:'问题上报',d:'发现隐患实时上报并自动建档',icon:'M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',state:''},
+  {n:'05',t:'整改',d:'限期处置并跟踪整改进度',icon:'M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z',state:''},
+  {n:'06',t:'验收',d:'闭环验收并归档备查',icon:'M5 13l4 4L19 7',state:''},
+];
+const CASES=[
+  {n:'占压管线协调',lvl:'橙',area:'宁江区-松江大街',wait:'待拆迁',d:'商铺占压中压管线320m，需多部门协调拆迁'},
+  {n:'第三方施工破坏',lvl:'红',area:'长岭县 GP-005',wait:'待鉴定',d:'外力挖断钢管，已完成临时堵漏，待事故鉴定'},
+  {n:'法兰渗漏深埋',lvl:'橙',area:'长岭县-太平山',wait:'待停气',d:'阀井法兰渗漏，需停气作业，待调度窗口'},
+  {n:'老旧管道改造',lvl:'黄',area:'扶余市 GP-010',wait:'待立项',d:'2012年敷设高压管，腐蚀加重，需改造立项'},
+];
+
+document.getElementById('cycleBody').innerHTML=CYCLES.map((c,i)=>`<tr><td>${c.area}</td><td>${c.name}</td><td><span class="tag info">${c.type}检</span></td><td class="t-sub fz12">${c.items}</td><td class="mono fz12">${c.term}</td><td>${c.state==='启用'?'<span class="tag ok">启用</span>':'<span class="tag warn">停用</span>'}</td><td><button class="btn" onclick="openCycleForm(${i})">修改</button> <button class="btn" onclick="toggleCycle(${i})">${c.state==='启用'?'停用':'启用'}</button> <button class="btn" onclick="delCycle(${i})">删除</button></td></tr>`).join('');
+
+document.getElementById('contentBody').innerHTML=CONTENTS.map((c,i)=>`<tr><td class="mono">${pad(i+1)}</td><td>${c.n}</td><td class="t-sub fz12">${c.range}</td><td><span class="tag info">${c.period}检</span></td><td class="mono t-accent">${c.items}</td><td class="mono fz12">${c.time}</td><td><button class="btn" onclick="openContentForm(${i})">编辑</button></td></tr>`).join('');
+
+document.getElementById('flowWrap').innerHTML=FLOW.map((f,i)=>{
+  const arr=i<FLOW.length-1?'<div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>':'';
+  const cls=f.state==='done'?'done':f.state==='cur'?'cur':'';
+  return `<div class="flow-step ${cls}" onclick="openFlowStep(${i})"><div class="si">${svgIcon(f.icon,16,16)}</div><div class="sn">STEP ${f.n}</div><div class="st">${f.t}</div><div class="sd">${f.d}</div></div>${arr}`;
+}).join('');
+
+const plans=DB.inspections;
+document.getElementById('planCnt').textContent=plans.filter(p=>p.state==='进行中').length;
+document.getElementById('planBody').innerHTML=plans.map((p,i)=>`<tr><td class="mono">${p.id}</td><td>${p.plan}</td><td>${p.area}</td><td><span class="tag info">${p.period}</span></td><td class="mono">${fmt(p.target)}</td><td class="mono t-accent">${fmt(p.done)}</td><td style="min-width:120px"><div class="flex aic gap8"><div class="bar ${p.rate>=80?'':p.rate>=60?'warn':'danger'}" style="flex:1"><i style="width:${p.rate}%"></i></div><span class="mono fz12 ${p.rate>=80?'t-ok':p.rate>=60?'t-warn':'t-danger'}">${p.rate}%</span></div></td><td>${p.state==='已完成'?'<span class="tag ok">已完成</span>':'<span class="tag warn">进行中</span>'}</td><td><button class="btn" onclick="openPlanDetail(${i})">详情</button></td></tr>`).join('');
+
+const sumTarget=plans.reduce((s,p)=>s+p.target,0);
+const sumDone=plans.reduce((s,p)=>s+p.done,0);
+const totalRate=Math.round(sumDone/sumTarget*100);
+document.getElementById('totalRate').textContent=totalRate+'%';
+document.getElementById('sumTarget').textContent=fmt(sumTarget);
+document.getElementById('sumDone').textContent=fmt(sumDone);
+document.getElementById('sumLeft').textContent=fmt(sumTarget-sumDone);
+donut(document.getElementById('totalDonut'),[{v:totalRate,color:'#22D3EE'},{v:100-totalRate,color:'rgba(124,58,237,.18)'}]);
+
+const distMap={};
+plans.forEach(p=>{if(!distMap[p.area])distMap[p.area]={t:0,d:0};distMap[p.area].t+=p.target;distMap[p.area].d+=p.done;});
+const distData=Object.entries(distMap).map(([k,v])=>({name:k,rate:Math.round(v.d/v.t*100)}));
+barChart(document.getElementById('distChart'),distData.map(d=>d.rate),distData.map(d=>d.name),{color:'#22D3EE'});
+document.getElementById('distLegend').innerHTML=distData.map(d=>`<div class="flex jcb fz12" style="margin-bottom:4px"><span class="t-sub">${d.name}</span><span class="mono ${d.rate>=80?'t-ok':d.rate>=60?'t-warn':'t-danger'}">${d.rate}%</span></div>`).join('');
+
+document.getElementById('caseList').innerHTML=CASES.map((c,i)=>`<div class="case-card" onclick="openCaseDetail(${i})"><div class="ct">${lvlTag(c.lvl)} ${c.n}</div><div class="cd">${c.area} · ${c.wait}</div><div class="cd mt8">${c.d}</div></div>`).join('');
+
+document.querySelectorAll('#tabbar button').forEach(b=>{b.onclick=()=>{document.querySelectorAll('#tabbar button').forEach(x=>x.classList.remove('on'));b.classList.add('on');document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));document.querySelector('.tab-pane[data-pane="'+b.dataset.tab+'"]').classList.add('on');};});
+
+function openCycleForm(i){
+  const c=i!=null?CYCLES[i]:{area:'',name:'',type:'月',items:'',term:'',state:'启用'};
+  openDrawer(i!=null?'修改检查周期':'新增检查周期',`
+  <div class="field"><div class="k">所在区域</div><div class="v"><select id="fArea" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px">${DB.districts.map(d=>`<option ${d===c.area?'selected':''}>${d}</option>`).join('')}</select></div></div>
+  <div class="field"><div class="k">周期名称</div><div class="v"><input id="fName" value="${c.name}" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px"></div></div>
+  <div class="field"><div class="k">周期类型</div><div class="v"><select id="fType" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px">${['月','季','年'].map(t=>`<option ${t===c.type?'selected':''}>${t}检</option>`).join('')}</select></div></div>
+  <div class="field"><div class="k">检查项目</div><div class="v"><input id="fItems" value="${c.items}" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px"></div></div>
+  <div class="field"><div class="k">有效期</div><div class="v"><input id="fTerm" value="${c.term}" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px"></div></div>
+  <div class="field"><div class="k">状态</div><div class="v"><select id="fState" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px"><option ${c.state==='启用'?'selected':''}>启用</option><option ${c.state==='停用'?'selected':''}>停用</option></select></div></div>
+  <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="saveCycle(${i})">保存</button></div>`);
+}
+function saveCycle(i){closeDrawer();openDrawer('保存结果',`<div class="field"><div class="k">操作</div><div class="v">${i!=null?'周期配置已更新':'周期配置已新增'}</div></div><div class="field"><div class="k">提示</div><div class="v t-sub">演示数据，未真正持久化</div></div><div class="df"><button class="btn primary" onclick="closeDrawer()">知道了</button></div>`);}
+function toggleCycle(i){openDrawer('切换状态',`<div class="field"><div class="k">周期</div><div class="v">${CYCLES[i].name}</div></div><div class="field"><div class="k">当前状态</div><div class="v">${CYCLES[i].state}</div></div><div class="field"><div class="k">操作</div><div class="v t-sub">确认${CYCLES[i].state==='启用'?'停用':'启用'}该周期？</div></div><div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer()">确认</button></div>`);}
+function delCycle(i){openDrawer('删除周期',`<div class="field"><div class="k">周期</div><div class="v">${CYCLES[i].name}</div></div><div class="field"><div class="k">警告</div><div class="v t-danger">删除后不可恢复，关联计划将失效</div></div><div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer()">确认删除</button></div>`);}
+
+function openContentForm(i){
+  const c=i!=null?CONTENTS[i]:{n:'',range:'',period:'月',items:0,time:'2026-09-01'};
+  openDrawer(i!=null?'编辑作业内容':'新增作业内容',`
+  <div class="field"><div class="k">作业内容</div><div class="v"><input id="cName" value="${c.n}" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px"></div></div>
+  <div class="field"><div class="k">检查范围</div><div class="v"><input id="cRange" value="${c.range}" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px"></div></div>
+  <div class="field"><div class="k">适用周期</div><div class="v"><select id="cPeriod" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px">${['月','季','年'].map(t=>`<option ${t===c.period?'selected':''}>${t}检</option>`).join('')}</select></div></div>
+  <div class="field"><div class="k">项目数</div><div class="v mono">${c.items}</div></div>
+  <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer()">保存</button></div>`);
+}
+
+function openFlowStep(i){
+  const f=FLOW[i];
+  openDrawer('流程节点 · '+f.t+` (STEP ${f.n})`,`<div class="field"><div class="k">节点说明</div><div class="v">${f.d}</div></div>
+  <div class="field"><div class="k">表单字段</div><div class="v t-sub fz12">派单方式 / 责任人 / 时限 / 影像要求 / GPS定位 / 超时升级</div></div>
+  <div class="field"><div class="k">节点状态</div><div class="v">${f.state==='done'?'<span class="tag ok">已完成</span>':f.state==='cur'?'<span class="tag warn">进行中</span>':'<span class="tag info">待执行</span>'}</div></div>
+  <div class="df"><button class="btn primary" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+function openPlanDetail(i){
+  const p=plans[i];
+  openDrawer('安检计划详情 · '+p.id,`
+  <div class="field"><div class="k">计划名</div><div class="v">${p.plan}</div></div>
+  <div class="field"><div class="k">执行区域</div><div class="v">${p.area}</div></div>
+  <div class="field"><div class="k">周期</div><div class="v">${p.period}检</div></div>
+  <div class="field"><div class="k">目标数</div><div class="v mono">${fmt(p.target)}</div></div>
+  <div class="field"><div class="k">已完成</div><div class="v mono t-ok">${fmt(p.done)}</div></div>
+  <div class="field"><div class="k">完成率</div><div class="v mono t-accent">${p.rate}%</div></div>
+  <div class="field"><div class="k">状态</div><div class="v">${p.state==='已完成'?'<span class="tag ok">已完成</span>':'<span class="tag warn">进行中</span>'}</div></div>
+  <div class="df"><button class="btn primary" onclick="openDispatch(${i})">分派</button><button class="btn" onclick="closeDrawer()">关闭</button></div>`);
+}
+
+function openDispatch(i){
+  const p=i!=null?plans[i]:{id:'X-NEW',plan:'新建计划',area:'宁江区',period:'月',target:0,done:0,rate:0,state:'待分派'};
+  openDrawer('分派安检计划',`
+  <div class="field"><div class="k">计划名</div><div class="v">${p.plan}</div></div>
+  <div class="field"><div class="k">执行区域</div><div class="v">${p.area}</div></div>
+  <div class="field"><div class="k">责任企业</div><div class="v"><select id="dEnt" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px">${DB.enterprises.filter(e=>e.dist===p.area).map(e=>`<option>${e.name}</option>`).join('')||DB.enterprises.map(e=>`<option>${e.name}</option>`).join('')}</select></div></div>
+  <div class="field"><div class="k">作业班组</div><div class="v"><input value="班组A（5人）" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px"></div></div>
+  <div class="field"><div class="k">完成期限</div><div class="v"><input type="date" value="2026-09-30" style="width:100%;padding:6px;background:rgba(8,17,38,.8);border:1px solid var(--line);color:var(--text);border-radius:4px"></div></div>
+  <div class="field"><div class="k">目标数</div><div class="v mono">${fmt(p.target||0)}</div></div>
+  <div class="field"><div class="k">分派说明</div><div class="v t-sub fz12">按区域+企业权责范围分派，系统自动派单至班组APP</div></div>
+  <div class="df"><button class="btn" onclick="closeDrawer()">取消</button><button class="btn primary" onclick="closeDrawer()">确认分派</button></div>`);
+}
+function exportPlan(){openDrawer('导出计划',`<div class="field"><div class="k">导出范围</div><div class="v">当前在执行计划 ${plans.length} 条</div></div><div class="field"><div class="k">格式</div><div class="v">Excel / PDF</div></div><div class="df"><button class="btn primary" onclick="closeDrawer()">生成报告</button></div>`);}
+
+function openCaseDetail(i){
+  const c=CASES[i];
+  openDrawer('疑难案件 · '+c.n,`
+  <div class="field"><div class="k">案件名称</div><div class="v">${c.n}</div></div>
+  <div class="field"><div class="k">等级</div><div class="v">${lvlTag(c.lvl)}</div></div>
+  <div class="field"><div class="k">所在位置</div><div class="v">${c.area}</div></div>
+  <div class="field"><div class="k">当前状态</div><div class="v"><span class="tag warn">${c.wait}</span></div></div>
+  <div class="field"><div class="k">案件描述</div><div class="v">${c.d}</div></div>
+  <div class="field"><div class="k">处置建议</div><div class="v t-sub">一时难以解决，待外部条件具备后启动处置流程</div></div>
+  <div class="df"><button class="btn" onclick="closeDrawer()">关闭</button><button class="btn primary" onclick="closeDrawer()">跟踪督办</button></div>`);
+}
+</script>
+</body>
+</html>
