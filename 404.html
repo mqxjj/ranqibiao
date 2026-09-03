@@ -1,0 +1,10 @@
+﻿<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Loading...</title><script>
+// GitHub Pages SPA fallback: redirect 404 paths back to cockpit/index.html
+var p=location.pathname;
+// If it's a known cockpit page, redirect directly
+var pages=['index','basic','overview','leak','emergency','hidden','risk','monitor','warning','assess','inspect','complaint','auxiliary'];
+var m=p.match(/\/cockpit\/(\w+)\.html/);
+if(m){location.replace(pages.indexOf(m[1])>=0?p:'/cockpit/index.html');}
+// Otherwise go home
+else if(p!=='/'&&!p.endsWith('cockpit/')){location.replace('/cockpit/index.html');}
+</script></head><body></body></html>
