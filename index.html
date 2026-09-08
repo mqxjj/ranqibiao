@@ -1,1 +1,1517 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>燃气监管Demo</title><meta http-equiv="refresh" content="0;url=cockpit/index.html"></head><body><p>Redirecting to cockpit/index.html...</p></body></html>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>燃气监测感知终端（智能表）动态演示</title>
+<style>
+  :root{
+    --bg-0:#050814;
+    --bg-1:#0a1024;
+    --cyan:#00e5ff;
+    --cyan-soft:#5cf2ff;
+    --purple:#a855ff;
+    --warn:#ffb020;
+    --danger:#ff3b5c;
+    --ok:#22e0a0;
+    --txt:#d7e4ff;
+    --txt-dim:#7e8db3;
+    --line:rgba(0,229,255,.18);
+    --glass:rgba(12,22,48,.55);
+    /* 淡色系 */
+    --light-bg-0:#eef2f8;
+    --light-bg-1:#dde5f0;
+    --light-txt:#1a2540;
+    --light-txt-dim:#5a6a85;
+    --light-line:rgba(40,70,120,.22);
+    --light-card:rgba(255,255,255,.78);
+    --steel:#5a6574;
+    --brass:#d8a868;
+    --copper:#d87040;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:"Microsoft YaHei","PingFang SC",-apple-system,sans-serif;
+    background:
+      radial-gradient(1200px 800px at 80% -10%,rgba(168,85,255,.10),transparent 60%),
+      radial-gradient(1000px 700px at 10% 110%,rgba(0,229,255,.10),transparent 60%),
+      linear-gradient(180deg,var(--bg-0),var(--bg-1) 60%,var(--bg-0));
+    color:var(--txt);
+    user-select:none;
+  }
+  /* 顶部栏 */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;height:62px;z-index:30;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 26px;
+    background:linear-gradient(180deg,rgba(8,14,36,.85),rgba(8,14,36,.35));
+    border-bottom:1px solid var(--line);
+    backdrop-filter:blur(10px);
+  }
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand .logo{
+    width:34px;height:34px;border-radius:9px;
+    background:conic-gradient(from 200deg,var(--cyan),var(--purple),var(--cyan));
+    box-shadow:0 0 18px rgba(0,229,255,.55),inset 0 0 8px rgba(255,255,255,.35);
+    position:relative;
+  }
+  .brand .logo::after{
+    content:"";position:absolute;inset:5px;border-radius:6px;
+    background:radial-gradient(circle at 30% 30%,#0b1a3a,#040712);
+    box-shadow:inset 0 0 10px rgba(0,229,255,.5);
+  }
+  .brand .t1{font-size:17px;font-weight:700;letter-spacing:1px}
+  .brand .t2{font-size:11px;color:var(--txt-dim);letter-spacing:2px;margin-top:2px}
+  .tabs{display:flex;gap:8px}
+  .tab{
+    padding:8px 18px;font-size:13px;border-radius:8px;cursor:pointer;
+    border:1px solid transparent;color:var(--txt-dim);
+    transition:.25s;letter-spacing:1px;
+  }
+  .tab:hover{color:var(--cyan-soft)}
+  .tab.active{
+    color:var(--cyan);
+    background:linear-gradient(180deg,rgba(0,229,255,.16),rgba(0,229,255,.05));
+    border-color:var(--line);
+    box-shadow:0 0 14px rgba(0,229,255,.22);
+  }
+  .status{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--txt-dim)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);animation:bl 1.6s infinite}
+  @keyframes bl{50%{opacity:.35}}
+
+  .stage{position:absolute;top:62px;left:0;right:0;bottom:0;display:flex}
+  .view{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .5s}
+  .view.active{opacity:1;pointer-events:auto}
+
+  /* ============ 管网宏观视图 ============ */
+  #viewMap{
+    background:
+      radial-gradient(900px 600px at 70% 30%,#f4f8fd,transparent 70%),
+      linear-gradient(180deg,var(--light-bg-0),var(--light-bg-1));
+    color:var(--light-txt);overflow:hidden;
+  }
+  #mapCanvas{display:block;width:100%;height:100%;cursor:default}
+  .map-hint{
+    position:absolute;left:24px;bottom:18px;font-size:11px;color:var(--light-txt-dim);
+    background:var(--light-card);padding:8px 14px;border-radius:8px;border:1px solid var(--light-line);
+    backdrop-filter:blur(6px);
+  }
+  .map-hint b{color:#0a66c0}
+  .map-legend{
+    position:absolute;right:22px;top:18px;width:230px;
+    background:var(--light-card);border:1px solid var(--light-line);border-radius:12px;
+    padding:14px 16px;box-shadow:0 8px 30px rgba(40,70,120,.15);backdrop-filter:blur(8px);
+    color:var(--light-txt);
+  }
+  .map-legend h3{font-size:12px;letter-spacing:2px;color:#0a66c0;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .map-legend h3::before{content:"";width:4px;height:14px;background:linear-gradient(180deg,#0a66c0,#d07030);border-radius:2px}
+  .map-legend .lg-row{display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:8px}
+  .map-legend .lg-row .sw{width:18px;height:3px;border-radius:2px;flex:0 0 18px}
+  .map-legend .lg-row .dot{width:10px;height:10px;border-radius:50%;flex:0 0 10px;background:#d07030;box-shadow:0 0 8px rgba(208,112,48,.6);animation:none}
+  .map-legend .stat{margin-top:12px;border-top:1px dashed var(--light-line);padding-top:10px}
+  .map-legend .stat .r{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;color:var(--light-txt-dim)}
+  .map-legend .stat .r b{color:#d07030;font-weight:700}
+  .meter-pop{
+    position:absolute;background:#fff;border:1px solid var(--light-line);border-radius:10px;
+    padding:12px 14px;min-width:200px;font-size:11px;color:var(--light-txt);
+    box-shadow:0 8px 24px rgba(40,70,120,.25);transform:translate(-50%,-115%);
+    opacity:0;pointer-events:none;transition:opacity .2s;z-index:5;
+  }
+  .meter-pop.show{opacity:1;pointer-events:auto}
+  .meter-pop::after{
+    content:"";position:absolute;left:50%;bottom:-7px;transform:translateX(-50%) rotate(45deg);
+    width:12px;height:12px;background:#fff;border-right:1px solid var(--light-line);border-bottom:1px solid var(--light-line);
+  }
+  .meter-pop .mt{font-size:13px;font-weight:700;color:#0a66c0;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+  .meter-pop .mt::before{content:"◈";color:#d07030}
+  .meter-pop .mr{display:flex;justify-content:space-between;margin-bottom:3px;color:var(--light-txt-dim)}
+  .meter-pop .mr b{color:var(--light-txt);font-weight:600}
+  .meter-pop .mb{
+    margin-top:8px;padding:7px 10px;background:linear-gradient(90deg,#0a66c0,#d07030);
+    color:#fff;border-radius:6px;text-align:center;cursor:pointer;font-size:12px;font-weight:600;transition:.2s;
+  }
+  .meter-pop .mb:hover{box-shadow:0 4px 14px rgba(10,102,192,.4)}
+
+  /* ============ 3D视图（淡色背景，凸显器具） ============ */
+  #view3d{
+    background:
+      radial-gradient(900px 600px at 50% 35%,#f8fbff,transparent 75%),
+      linear-gradient(180deg,#e8eef6,#cfdbe8);
+  }
+  #view3d canvas.three{display:block;position:absolute;top:0;left:0;cursor:grab}
+  #view3d canvas.three:active{cursor:grabbing}
+  #threeHost{position:absolute;inset:0}
+  .hint{
+    position:absolute;left:24px;bottom:18px;font-size:11px;color:var(--light-txt-dim);
+    background:var(--light-card);padding:8px 14px;border-radius:8px;border:1px solid var(--light-line);
+    backdrop-filter:blur(6px);
+  }
+  .hint b{color:#0a66c0}
+
+  /* 部件标签层（始终显示，可点击） */
+  #labels{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+  .lbl{
+    position:absolute;transform:translate(-50%,-50%);cursor:pointer;pointer-events:auto;
+    background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(245,248,253,.88));
+    border:1px solid var(--light-line);
+    border-left:3px solid #d07030;
+    padding:6px 11px 6px 13px;border-radius:7px;
+    font-size:12px;white-space:nowrap;color:var(--light-txt);
+    box-shadow:0 4px 18px rgba(40,70,120,.22);
+    transition:transform .2s, box-shadow .2s;
+    backdrop-filter:blur(4px);z-index:2;
+  }
+  .lbl:hover{
+    transform:translate(-50%,-50%) scale(1.06);
+    box-shadow:0 6px 24px rgba(208,112,48,.4);
+    border-left-color:#e8821a;
+  }
+  .lbl.active{
+    background:linear-gradient(180deg,#fff4e8,#ffe0c8);
+    border-left-color:#e8821a;
+    box-shadow:0 6px 24px rgba(208,112,48,.5);
+  }
+  .lbl .n{color:#d07030;font-weight:700;margin-right:7px}
+  .lbl .arr{color:#9ab;margin-left:6px;font-size:10px}
+  /* 管道标签（蓝色区分） */
+  .lbl.pipe-lbl{
+    border-left-color:#3aa0ff;
+    background:linear-gradient(180deg,rgba(240,248,255,.95),rgba(230,242,253,.88));
+  }
+  .lbl.pipe-lbl .n{color:#3aa0ff;font-size:14px}
+  /* 指引线 */
+  .lbl-line{
+    position:absolute;height:1px;background:linear-gradient(90deg,#d07030,rgba(208,112,48,.3));
+    transform-origin:left center;pointer-events:none;z-index:1;
+    box-shadow:0 0 4px rgba(208,112,48,.4);
+  }
+
+  /* 部件详情卡片 - 右侧面板 */
+  .part-card{
+    position:absolute;left:auto;right:16px;top:50%;transform:translateY(-50%) scale(.92);
+    width:340px;background:#fff;border:1px solid var(--light-line);border-radius:14px;
+    padding:0;box-shadow:0 20px 60px rgba(20,40,80,.35);
+    opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;z-index:20;
+    overflow:hidden;
+  }
+  .part-card.show{opacity:1;pointer-events:auto;transform:translateY(-50%) scale(1)}
+  .part-card .ph{
+    background:linear-gradient(135deg,#0a66c0,#d07030);color:#fff;padding:14px 18px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .part-card .ph .pt{font-size:15px;font-weight:700;letter-spacing:1px}
+  .part-card .ph .pn{font-size:11px;opacity:.85}
+  .part-card .pc{padding:14px 18px}
+  .part-card .pd{font-size:12px;color:#3a4554;line-height:1.6;margin-bottom:12px}
+  .part-card .ps{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .part-card .ps .pi{
+    background:#f4f7fc;border-radius:8px;padding:8px 10px;border-left:2px solid #d07030;
+  }
+  .part-card .ps .pi .k{font-size:10px;color:#8a9ab0;margin-bottom:3px}
+  .part-card .ps .pi .v{font-size:12px;color:#1a2540;font-weight:600}
+  .part-card .close{
+    position:absolute;right:10px;top:10px;width:24px;height:24px;border-radius:50%;
+    background:rgba(255,255,255,.2);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-size:14px;transition:.2s;
+  }
+  .part-card .close:hover{background:rgba(255,255,255,.35)}
+
+  /* 控制面板 */
+  .panel{
+    position:absolute;right:22px;top:18px;width:268px;
+    background:var(--light-card);border:1px solid var(--light-line);border-radius:12px;
+    padding:16px 16px 14px;box-shadow:0 8px 30px rgba(40,70,120,.18);backdrop-filter:blur(10px);
+    color:var(--light-txt);
+  }
+  .panel h3{font-size:12px;letter-spacing:2px;color:#0a66c0;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .panel h3::before{content:"";width:4px;height:14px;background:linear-gradient(180deg,#0a66c0,#d07030);border-radius:2px}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btn{
+    padding:9px 0;font-size:12px;border-radius:8px;cursor:pointer;text-align:center;
+    background:linear-gradient(180deg,rgba(10,102,192,.10),rgba(208,112,48,.05));
+    border:1px solid var(--light-line);color:#0a66c0;
+    transition:.2s;letter-spacing:1px;font-weight:600;
+  }
+  .btn:hover{background:linear-gradient(180deg,rgba(10,102,192,.22),rgba(208,112,48,.1));color:#084488;box-shadow:0 0 12px rgba(10,102,192,.2)}
+  .btn.full{grid-column:1/3;background:linear-gradient(90deg,rgba(10,102,192,.18),rgba(208,112,48,.18));color:#0a4070}
+  .btn.full:hover{background:linear-gradient(90deg,rgba(10,102,192,.3),rgba(208,112,48,.3))}
+  .slider-row{margin-top:12px}
+  .slider-row label{font-size:11px;color:var(--light-txt-dim);display:flex;justify-content:space-between;margin-bottom:6px}
+  .slider-row label span{color:#d07030;font-weight:600}
+  input[type=range]{
+    width:100%;-webkit-appearance:none;height:4px;border-radius:2px;
+    background:linear-gradient(90deg,#0a66c0,#d07030);outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+    background:#fff;box-shadow:0 0 8px #0a66c0;cursor:pointer;border:1px solid #0a66c0;
+  }
+  .spec{margin-top:14px;border-top:1px dashed var(--light-line);padding-top:12px}
+  .spec .row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;color:var(--light-txt-dim)}
+  .spec .row b{color:#d07030;font-weight:600}
+
+  /* 返回按钮 */
+  .back-btn{
+    position:absolute;left:22px;top:18px;
+    background:var(--light-card);border:1px solid var(--light-line);border-radius:8px;
+    padding:8px 14px;font-size:12px;cursor:pointer;color:#0a66c0;font-weight:600;
+    box-shadow:0 4px 14px rgba(40,70,120,.12);transition:.2s;z-index:10;
+    display:flex;align-items:center;gap:6px;
+  }
+  .back-btn:hover{background:#fff;box-shadow:0 6px 18px rgba(40,70,120,.2)}
+
+  /* ============ 异常工况筛选按钮（3D视图内） ============ */
+  .abnormal-bar{
+    position:absolute;left:22px;bottom:18px;display:flex;gap:8px;
+    background:var(--light-card);border:1px solid var(--light-line);border-radius:30px;
+    padding:6px 8px;backdrop-filter:blur(8px);box-shadow:0 4px 18px rgba(40,70,120,.15);
+  }
+  .ab-bar-label{
+    font-size:10px;color:var(--light-txt-dim);align-self:center;margin:0 8px 0 4px;
+    letter-spacing:1px;
+  }
+  .ab-btn{
+    padding:7px 14px;font-size:12px;border-radius:20px;cursor:pointer;
+    background:rgba(255,255,255,.6);border:1px solid var(--light-line);
+    color:var(--light-txt);transition:.2s;font-weight:600;display:flex;align-items:center;gap:5px;
+  }
+  .ab-btn .ic{
+    width:8px;height:8px;border-radius:50%;background:#9ab;flex:0 0 8px;
+  }
+  .ab-btn:hover{background:#fff;box-shadow:0 2px 10px rgba(40,70,120,.2)}
+  .ab-btn.active{
+    color:#fff;border-color:transparent;
+    background:linear-gradient(90deg,#ff3b5c,#ff8030);
+    box-shadow:0 0 14px rgba(255,59,92,.4);
+  }
+  .ab-btn.active .ic{background:#fff;box-shadow:0 0 8px #fff}
+
+  /* 异常原理解析面板 */
+  .ab-panel{
+    position:absolute;left:22px;bottom:80px;width:340px;
+    background:linear-gradient(180deg,#fff,#f8fbff);
+    border:1px solid #ff8a60;border-radius:12px;
+    padding:14px 16px;box-shadow:0 12px 40px rgba(255,80,60,.25),0 0 0 1px rgba(255,59,92,.1);
+    opacity:0;pointer-events:none;transform:translateY(20px);transition:.3s;z-index:15;
+    color:#1a2540;
+  }
+  .ab-panel.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+  .ab-panel .ah{
+    font-size:13px;font-weight:700;color:#d03030;margin-bottom:8px;display:flex;align-items:center;gap:8px;
+    border-bottom:1px solid rgba(255,80,60,.2);padding-bottom:8px;
+  }
+  .ab-panel .ah .badge{
+    background:linear-gradient(90deg,#ff3b5c,#ff8030);color:#fff;font-size:10px;
+    padding:2px 8px;border-radius:10px;letter-spacing:1px;
+  }
+  .ab-panel .ah .close{
+    margin-left:auto;width:20px;height:20px;border-radius:50%;background:#ffe0d8;color:#d03030;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;
+  }
+  .ab-panel .ah .close:hover{background:#ffc8c0}
+  .ab-panel .body{font-size:11px;line-height:1.7;color:#3a4554}
+  .ab-panel .body b{color:#d03030}
+  .ab-panel .flow{
+    margin-top:10px;padding:10px;background:#fff5f0;border-radius:8px;border-left:3px solid #ff8030;
+  }
+  .ab-panel .flow .ft{font-size:10px;color:#9a5040;margin-bottom:6px;font-weight:600;letter-spacing:1px}
+  .ab-panel .flow .step{
+    display:flex;gap:8px;margin-bottom:5px;font-size:11px;color:#3a4554;align-items:flex-start;
+  }
+  .ab-panel .flow .step .n{
+    width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#ff3b5c,#ff8030);
+    color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;flex:0 0 18px;font-weight:700;
+  }
+
+  /* 加载 */
+  #loader{
+    position:fixed;inset:0;background:var(--bg-0);z-index:100;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+    transition:opacity .6s;
+  }
+  #loader.hide{opacity:0;pointer-events:none}
+  .ring{width:54px;height:54px;border-radius:50%;border:2px solid rgba(0,229,255,.18);border-top-color:var(--cyan);animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #loader .tx{font-size:12px;color:var(--txt-dim);letter-spacing:3px}
+
+  .toast{
+    position:fixed;left:50%;top:78px;transform:translateX(-50%) translateY(-20px);
+    background:linear-gradient(180deg,rgba(255,59,92,.2),rgba(8,14,36,.85));
+    border:1px solid rgba(255,59,92,.4);border-radius:8px;padding:10px 18px;
+    font-size:13px;color:#ff8aa0;opacity:0;transition:.4s;z-index:50;
+    box-shadow:0 0 20px rgba(255,59,92,.3);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.ok{background:linear-gradient(180deg,rgba(34,224,160,.2),rgba(8,14,36,.85));border-color:rgba(34,224,160,.4);color:#5cf2c0;box-shadow:0 0 20px rgba(34,224,160,.3)}
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <div class="ring"></div>
+  <div class="tx">SCENE LOADING · 智能表三维模型构建中</div>
+</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="logo"></div>
+    <div>
+      <div class="t1">燃气监测感知终端</div>
+      <div class="t2">GAS MONITORING TERMINAL · 智能表动态演示</div>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-view="map">管网宏观</div>
+    <div class="tab" data-view="3d">三维拆解</div>
+  </div>
+  <div class="status">
+    <div class="dot"></div>
+    <span id="statTxt">实时演示运行中</span>
+  </div>
+</div>
+
+<div class="stage">
+
+  <!-- 管网宏观视图 -->
+  <div class="view active" id="viewMap">
+    <canvas id="mapCanvas"></canvas>
+    <div class="map-hint">淡色地图底图 · <b>点击橙色器具点位</b> 进入三维详细拆解</div>
+    <div class="map-legend">
+      <h3>管网图例</h3>
+      <div class="lg-row"><span class="sw" style="background:#6a8ab0"></span>中压燃气主管</div>
+      <div class="lg-row"><span class="sw" style="background:#9ab0d0"></span>低压支管</div>
+      <div class="lg-row"><span class="dot"></span>智能表点位</div>
+      <div class="lg-row"><span class="dot" style="background:#0a66c0;box-shadow:0 0 8px rgba(10,102,192,.6)"></span>调压站</div>
+      <div class="stat">
+        <div class="r"><span>管网总长</span><b>128.6 km</b></div>
+        <div class="r"><span>智能表数</span><b>4 / 4 在线</b></div>
+        <div class="r"><span>今日流量</span><b>2,486 m³</b></div>
+        <div class="r"><span>异常告警</span><b style="color:#22a070">0 起</b></div>
+      </div>
+    </div>
+    <div class="meter-pop" id="meterPop"></div>
+  </div>
+
+  <!-- 3D视图 -->
+  <div class="view" id="view3d">
+    <div id="threeHost"></div>
+    <div id="labels"></div>
+    <div class="back-btn" id="backToMap">◀ 返回管网宏观</div>
+    <div class="hint">鼠标拖动旋转 · 滚轮缩放 · 拖 <b>拆解度</b> 滑块 · 点击 <b>部件名称</b> 查看详情</div>
+
+    <!-- 控制面板 -->
+    <div class="panel">
+      <h3>智能表结构</h3>
+      <div class="btns">
+        <div class="btn" id="btnExplode">拆解视图</div>
+        <div class="btn" id="btnAssemble">合拢复位</div>
+        <div class="btn" id="btnAuto">自动播放</div>
+        <div class="btn" id="btnReset">重置视角</div>
+        <div class="btn full" id="btnCut">模拟异常自主切断</div>
+      </div>
+      <div class="slider-row">
+        <label>拆解度 <span id="explodeVal">0%</span></label>
+        <input type="range" id="explodeSlider" min="0" max="100" value="0">
+      </div>
+      <div class="slider-row">
+        <label>旋转 <span id="rotVal">自动</span></label>
+        <input type="range" id="rotSlider" min="-30" max="30" value="6">
+      </div>
+      <div class="spec">
+        <div class="row"><span>计量精度</span><b>G4 / 2.5级</b></div>
+        <div class="row"><span>工作压力</span><b>0.1~0.4 MPa</b></div>
+        <div class="row"><span>流量范围</span><b>0.04~6 m³/h</b></div>
+        <div class="row"><span>通信方式</span><b>NB-IoT / 4G</b></div>
+        <div class="row"><span>切断响应</span><b>&lt; 0.5 s</b></div>
+        <div class="row"><span>电池寿命</span><b>≥ 10 年</b></div>
+      </div>
+    </div>
+
+    <!-- 异常工况筛选按钮 -->
+    <div class="abnormal-bar">
+      <span class="ab-bar-label">异常工况模拟</span>
+      <div class="ab-btn" data-ab="lowpressure"><span class="ic" style="background:#4a8aff"></span>欠压</div>
+      <div class="ab-btn" data-ab="overpressure"><span class="ic" style="background:#ff3b5c"></span>超压</div>
+      <div class="ab-btn" data-ab="overlimit"><span class="ic" style="background:#ffb020"></span>流量超限</div>
+      <div class="ab-btn" data-ab="leak"><span class="ic" style="background:#a855ff"></span>微小泄漏</div>
+      <div class="ab-btn" data-ab="reset" style="margin-left:8px"><span class="ic" style="background:#22a070"></span>恢复正常</div>
+    </div>
+
+    <!-- 异常原理解析面板 -->
+    <div class="ab-panel" id="abPanel">
+      <div class="ah">
+        <span class="badge">异常工况</span>
+        <span id="abTitle">欠压工况</span>
+        <span class="close" id="abClose">×</span>
+      </div>
+      <div class="body" id="abBody"></div>
+      <div class="flow" id="abFlow"></div>
+    </div>
+
+    <!-- 部件详情卡片 -->
+    <div class="part-card" id="partCard">
+      <div class="ph">
+        <div>
+          <div class="pt" id="pcTitle">部件名称</div>
+          <div class="pn" id="pcNum">部件编号</div>
+        </div>
+        <div class="close" id="pcClose">×</div>
+      </div>
+      <div class="pc">
+        <div class="pd" id="pcDesc"></div>
+        <div class="ps" id="pcSpec"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script>
+/* =========================================================
+   燃气监测感知终端（智能表）动态演示
+   ========================================================= */
+(function(){
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+  /* =========================================================
+     一、管网宏观视图
+     ========================================================= */
+  let mapCtx,mapCanvas,mapT=0,mapW=0,mapH=0;
+  let meters=[],hoveredMeter=-1;
+  function initMap(){
+    mapCanvas=$('#mapCanvas'); mapCtx=mapCanvas.getContext('2d');
+    resizeMap(); window.addEventListener('resize',resizeMap);
+    meters=[
+      {x:0.28,y:0.42,name:'宁江A区·智能表',id:'NJ-A-001',type:'居民',q:2.4,p:3.2,status:'正常'},
+      {x:0.52,y:0.30,name:'江南B区·智能表',id:'NJ-B-007',type:'商服',q:4.8,p:3.0,status:'正常'},
+      {x:0.68,y:0.58,name:'伯都讷大街·智能表',id:'BD-003',type:'工业',q:5.6,p:3.4,status:'正常'},
+      {x:0.42,y:0.68,name:'文化小区·智能表',id:'WH-012',type:'居民',q:1.8,p:3.1,status:'正常'}
+    ];
+    mapCanvas.addEventListener('mousemove',onMapMove);
+    mapCanvas.addEventListener('click',onMapClick);
+    mapCanvas.addEventListener('mouseleave',()=>{$('#meterPop').classList.remove('show');hoveredMeter=-1});
+    mapLoop();
+  }
+  function resizeMap(){
+    const dpr=window.devicePixelRatio||1; const r=mapCanvas.getBoundingClientRect();
+    mapCanvas.width=r.width*dpr; mapCanvas.height=r.height*dpr;
+    mapCtx.setTransform(dpr,0,0,dpr,0,0); mapW=r.width; mapH=r.height;
+  }
+  const pipeNodes={
+    main:[[0.10,0.50,'门站'],[0.22,0.45,'调压站1'],[0.40,0.40,'T1'],[0.55,0.35,'T2'],[0.72,0.55,'T3'],[0.88,0.60,'门站2']],
+    branch:[[[0.40,0.40],[0.28,0.42]],[[0.55,0.35],[0.52,0.30]],[[0.72,0.55],[0.68,0.58]],[[0.40,0.40],[0.42,0.68]],[[0.22,0.45],[0.18,0.65]],[[0.55,0.35],[0.78,0.20]]]
+  };
+  function drawMap(){
+    const ctx=mapCtx; ctx.clearRect(0,0,mapW,mapH);
+    drawMapBase(ctx); drawPipes(ctx);
+    pipeNodes.main.forEach(n=>{
+      const [nx,ny]=toPx(n[0],n[1]);
+      const isStation=n[2].includes('门站')||n[2].includes('调压');
+      ctx.fillStyle=isStation?'#0a66c0':'#6a8ab0'; ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+      ctx.shadowColor=isStation?'rgba(10,102,192,.5)':'rgba(106,138,176,.4)';
+      ctx.shadowBlur=isStation?10:4;
+      ctx.beginPath(); ctx.arc(nx,ny,isStation?7:4,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.shadowBlur=0;
+      ctx.fillStyle='#3a4554'; ctx.font='11px Microsoft YaHei'; ctx.textAlign='center';
+      ctx.fillText(n[2],nx,ny-12);
+    });
+    meters.forEach((m,i)=>{
+      const [mx,my]=toPx(m.x,m.y); const isHover=i===hoveredMeter;
+      const pulse=(Math.sin(mapT*0.05+i)+1)/2;
+      ctx.fillStyle=`rgba(208,112,48,${0.15+pulse*0.25})`;
+      ctx.beginPath(); ctx.arc(mx,my,14+pulse*8,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=isHover?'#e8821a':'#d07030'; ctx.strokeStyle='#fff'; ctx.lineWidth=2.5;
+      ctx.shadowColor='rgba(208,112,48,.7)'; ctx.shadowBlur=isHover?16:8;
+      ctx.beginPath(); ctx.arc(mx,my,isHover?8:6,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.shadowBlur=0;
+      ctx.fillStyle=isHover?'#d07030':'#5a6a85'; ctx.font=(isHover?'bold ':'')+'11px Microsoft YaHei';
+      ctx.textAlign='center'; ctx.fillText(m.name,mx,my+22);
+      ctx.fillStyle='#8a9ab0'; ctx.font='9px Microsoft YaHei'; ctx.fillText(m.id,mx,my+34);
+    });
+    ctx.fillStyle='#1a2540'; ctx.font='bold 14px Microsoft YaHei'; ctx.textAlign='left';
+    ctx.fillText('松原宁江区 · 燃气管网宏观态势',24,30);
+    ctx.fillStyle='#5a6a85'; ctx.font='11px Microsoft YaHei';
+    ctx.fillText('GAS PIPELINE NETWORK · 智能表部署点位',24,48);
+    drawCompass(ctx,mapW-60,60);
+  }
+  function drawMapBase(ctx){
+    ctx.strokeStyle='rgba(120,170,210,.35)'; ctx.lineWidth=22; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-10,mapH*0.85);
+    ctx.bezierCurveTo(mapW*0.3,mapH*0.7,mapW*0.5,mapH*0.95,mapW*0.7,mapH*0.65);
+    ctx.bezierCurveTo(mapW*0.85,mapH*0.5,mapW*0.95,mapH*0.7,mapW+10,mapH*0.6); ctx.stroke();
+    ctx.strokeStyle='rgba(120,140,170,.10)'; ctx.lineWidth=1;
+    for(let i=0;i<mapW;i+=80){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,mapH);ctx.stroke();}
+    for(let i=0;i<mapH;i+=80){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(mapW,i);ctx.stroke();}
+    const blocks=[[0.15,0.10,0.20,0.15],[0.40,0.15,0.18,0.12],[0.65,0.08,0.22,0.18],[0.10,0.35,0.15,0.20],[0.35,0.50,0.20,0.15],[0.62,0.40,0.18,0.18],[0.20,0.70,0.25,0.15],[0.55,0.72,0.22,0.13]];
+    ctx.fillStyle='rgba(180,200,220,.18)';
+    blocks.forEach(b=>{const [x,y,w,h]=toPx(b[0],b[1],b[2],b[3]);ctx.fillRect(x,y,w,h);});
+  }
+  function drawPipes(ctx){
+    ctx.strokeStyle='#6a8ab0'; ctx.lineWidth=3.5; ctx.lineCap='round';
+    ctx.beginPath(); pipeNodes.main.forEach((n,i)=>{const [x,y]=toPx(n[0],n[1]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}); ctx.stroke();
+    const flowT=mapT*0.008; const pts=pipeNodes.main.map(n=>toPx(n[0],n[1]));
+    for(let k=0;k<4;k++){
+      const t=(flowT+k*0.25)%1; const total=pts.length-1; const idx=Math.floor(t*total);
+      const lt=(t*total)-idx;
+      if(idx<pts.length-1){
+        const x=lerp(pts[idx][0],pts[idx+1][0],lt); const y=lerp(pts[idx][1],pts[idx+1][1],lt);
+        ctx.fillStyle='#0a66c0'; ctx.shadowColor='#0a66c0'; ctx.shadowBlur=10;
+        ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+      }
+    }
+    ctx.strokeStyle='#9ab0d0'; ctx.lineWidth=2;
+    pipeNodes.branch.forEach(b=>{const [a,c]=b;const [x1,y1]=toPx(a[0],a[1]);const [x2,y2]=toPx(c[0],c[1]);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();});
+  }
+  function drawCompass(ctx,x,y){
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle='rgba(255,255,255,.85)'; ctx.strokeStyle='#5a6a85'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#d07030'; ctx.beginPath(); ctx.moveTo(0,-14);ctx.lineTo(4,0);ctx.lineTo(0,-4);ctx.lineTo(-4,0);ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#9ab0d0'; ctx.beginPath(); ctx.moveTo(0,14);ctx.lineTo(4,0);ctx.lineTo(0,4);ctx.lineTo(-4,0);ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#3a4554'; ctx.font='bold 9px Microsoft YaHei'; ctx.textAlign='center'; ctx.fillText('N',0,-20); ctx.restore();
+  }
+  function toPx(nx,ny,nw,nh){const pad=60;const w=mapW-pad*2;const h=mapH-pad*2-30;if(nw!==undefined)return[pad+nx*w,50+ny*h,nw*w,nh*h];return[pad+nx*w,50+ny*h];}
+  function onMapMove(e){
+    const r=mapCanvas.getBoundingClientRect(); const mx=e.clientX-r.left; const my=e.clientY-r.top;
+    let found=-1; meters.forEach((m,i)=>{const [x,y]=toPx(m.x,m.y);if(Math.hypot(mx-x,my-y)<18)found=i;});
+    if(found!==hoveredMeter){hoveredMeter=found;mapCanvas.style.cursor=found>=0?'pointer':'default';if(found>=0)showMeterPop(meters[found]);else $('#meterPop').classList.remove('show');}
+    else if(found>=0)showMeterPop(meters[found]);
+  }
+  function showMeterPop(m){
+    const pop=$('#meterPop'); const [px,py]=toPx(m.x,m.y);
+    pop.style.left=px+'px'; pop.style.top=(py-10)+'px';
+    pop.innerHTML=`<div class="mt">${m.name}</div><div class="mr"><span>编号</span><b>${m.id}</b></div><div class="mr"><span>类型</span><b>${m.type}</b></div><div class="mr"><span>实时流量</span><b>${m.q} m³/h</b></div><div class="mr"><span>压力</span><b>${m.p} kPa</b></div><div class="mr"><span>状态</span><b style="color:#22a070">${m.status}</b></div><div class="mb" data-id="${m.id}">进入三维拆解 ▶</div>`;
+    pop.classList.add('show');
+    pop.querySelector('.mb').onclick=()=>enter3D(m);
+  }
+  function onMapClick(){if(hoveredMeter>=0)enter3D(meters[hoveredMeter]);}
+  function enter3D(m){$('#meterPop').classList.remove('show');switchView('3d');showToast('已加载：'+m.name,true);}
+  function mapLoop(){mapT++;drawMap();requestAnimationFrame(mapLoop);}
+
+  /* =========================================================
+     二、Three.js 3D 场景
+     ========================================================= */
+  let scene,camera,renderer,controls;
+  let parts=[];
+  let valveMesh, motorMesh, motorShaft, impellerMesh, gasStreams=[], gasArrows=[];
+  let valveWarnRing;
+  let inletMarker, outletMarker, inletLabel, outletLabel;
+  let autoRotateSpeed=0.06;
+  let explodeT=0,targetExplode=0;
+  let autoPlaying=false,autoStep=0,autoTimer=0;
+  let cutMode=false;
+  let activePart=-1;
+
+  function init3D(){
+    const wrap=$('#view3d');
+    scene=new THREE.Scene();
+    scene.background=null;
+    scene.fog=new THREE.Fog(0xe8eef6,28,60);
+
+    camera=new THREE.PerspectiveCamera(40,16/9,0.1,1000);
+    camera.position.set(9,7,15);
+
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setPixelRatio(Math.min(2,window.devicePixelRatio));
+    // 先设为合理默认值，onResize3D 和 animate 循环会修正
+    renderer.setSize(window.innerWidth, window.innerHeight-62, true);
+    renderer.setClearColor(0x000000,0);
+    renderer.shadowMap.enabled=true;
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure=1.15;
+    renderer.domElement.className='three';
+    $('#threeHost').appendChild(renderer.domElement);
+
+    // 灯光（明亮通透）
+    const amb=new THREE.AmbientLight(0xffffff,0.85); scene.add(amb);
+    const hemi=new THREE.HemisphereLight(0xeef4ff,0xc8d8e8,0.65); scene.add(hemi);
+    const key=new THREE.DirectionalLight(0xffffff,1.35);
+    key.position.set(8,14,8); key.castShadow=true;
+    key.shadow.mapSize.width=1024; key.shadow.mapSize.height=1024;
+    key.shadow.camera.near=0.5; key.shadow.camera.far=50;
+    scene.add(key);
+    const fill=new THREE.DirectionalLight(0xd8e8ff,0.6); fill.position.set(-10,6,-8); scene.add(fill);
+    const rim=new THREE.PointLight(0xffa040,0.6,40); rim.position.set(0,-2,8); scene.add(rim);
+    const back=new THREE.PointLight(0x4a8aff,0.5,40); back.position.set(-6,4,-6); scene.add(back);
+
+    // 淡色地面
+    const discGeo=new THREE.CircleGeometry(8,64);
+    const discMat=new THREE.MeshStandardMaterial({color:0xf0f4fa,roughness:0.85,metalness:0.1,transparent:true,opacity:0.92,side:THREE.DoubleSide});
+    const disc=new THREE.Mesh(discGeo,discMat);
+    disc.rotation.x=-Math.PI/2; disc.position.y=-3.6; disc.receiveShadow=true;
+    scene.add(disc);
+
+    // 装饰环
+    const ringGeo=new THREE.RingGeometry(4.5,6.2,80);
+    const ring=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:0x8aa0c0,transparent:true,opacity:0.3,side:THREE.DoubleSide}));
+    ring.rotation.x=-Math.PI/2; ring.position.y=-3.58; scene.add(ring);
+    const ring2=new THREE.Mesh(new THREE.RingGeometry(3.8,3.9,80),new THREE.MeshBasicMaterial({color:0xd07030,transparent:true,opacity:0.5}));
+    ring2.rotation.x=-Math.PI/2; ring2.position.y=-3.56; scene.add(ring2);
+
+    // 网格地板
+    const grid=new THREE.GridHelper(40,40,0x9ab0d0,0xc8d4e0);
+    grid.position.y=-3.57; grid.material.transparent=true; grid.material.opacity=0.35;
+    scene.add(grid);
+
+    controls=new OrbitControlsLite(camera,renderer.domElement);
+    buildMeter(); buildLabels(); onResize3D();
+    window.addEventListener('resize',onResize3D);
+    setTimeout(()=>$('#loader').classList.add('hide'),600);
+    animate();
+  }
+
+  function OrbitControlsLite(cam,dom){
+    let theta=0.55,phi=0.9,dist=18;
+    let dragging=false,lx=0,ly=0;
+    let tTheta=theta,tPhi=phi,tDist=dist;
+    function apply(){
+      const r=Math.max(2,dist);
+      cam.position.set(r*Math.sin(phi)*Math.cos(theta),r*Math.cos(phi),r*Math.sin(phi)*Math.sin(theta));
+      cam.lookAt(0,0,0);
+    }
+    apply();
+    dom.addEventListener('mousedown',e=>{dragging=true;lx=e.clientX;ly=e.clientY});
+    window.addEventListener('mouseup',()=>dragging=false);
+    window.addEventListener('mousemove',e=>{if(!dragging)return;const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;tTheta-=dx*0.01;tPhi=clamp(tPhi-dy*0.01,0.2,Math.PI-0.2);});
+    dom.addEventListener('wheel',e=>{e.preventDefault();tDist=clamp(tDist+e.deltaY*0.015,8,36);},{passive:false});
+    dom.addEventListener('touchstart',e=>{if(e.touches.length===1){dragging=true;lx=e.touches[0].clientX;ly=e.touches[0].clientY}},{passive:true});
+    window.addEventListener('touchmove',e=>{if(e.touches.length===1&&dragging){const dx=e.touches[0].clientX-lx,dy=e.touches[0].clientY-ly;lx=e.touches[0].clientX;ly=e.touches[0].clientY;tTheta-=dx*0.01;tPhi=clamp(tPhi-dy*0.01,0.2,Math.PI-0.2)}},{passive:true});
+    window.addEventListener('touchend',()=>dragging=false);
+    this.update=function(spd){theta=lerp(theta,tTheta+spd*0.016,0.08);phi=lerp(phi,tPhi,0.08);dist=lerp(dist,tDist,0.08);apply();};
+    this.reset=function(){tTheta=0.6;tPhi=0.95;tDist=18};
+  }
+
+  /* ---------- 构建智能表（真实材质·高度仿真） ---------- */
+  function buildMeter(){
+    const root=new THREE.Group(); scene.add(root);
+
+    // 材质库（明亮配色：去除暗色emissive，提亮基色）
+    // 壳体：航空铝合金银白
+    const mAluminum=new THREE.MeshStandardMaterial({color:0xe8ecf2,metalness:0.85,roughness:0.28});
+    const mAluminumDark=new THREE.MeshStandardMaterial({color:0xcdd6e4,metalness:0.82,roughness:0.34});
+    // 抛光镜面银（电机外壳/端盖/装饰圈）
+    const mPolished=new THREE.MeshStandardMaterial({color:0xf2f5fa,metalness:0.97,roughness:0.08});
+    // 暖金色黄铜（球阀/接管/轴）
+    const mBrass=new THREE.MeshStandardMaterial({color:0xf0c878,metalness:0.9,roughness:0.25});
+    // 铜橙（传感器探头）
+    const mCopper=new THREE.MeshStandardMaterial({color:0xf09060,metalness:0.7,roughness:0.32});
+    // PCB 翠绿
+    const mPCB=new THREE.MeshStandardMaterial({color:0x38b068,metalness:0.3,roughness:0.5});
+    // 电池：亮银灰外壳 + 钴蓝电芯
+    const mBattery=new THREE.MeshStandardMaterial({color:0xa8aebc,metalness:0.7,roughness:0.35});
+    const mBatteryCell=new THREE.MeshStandardMaterial({color:0x4078c8,metalness:0.6,roughness:0.3});
+    // 深棕红橡胶（密封圈）
+    const mRubber=new THREE.MeshStandardMaterial({color:0x6a3a3a,metalness:0.1,roughness:0.8});
+    // 显示屏：深空蓝底
+    const mScreenBg=new THREE.MeshStandardMaterial({color:0x1a2c48,metalness:0.5,roughness:0.3});
+    const mScreenGlow=new THREE.MeshBasicMaterial({color:0x00e5ff,transparent:true,opacity:0.95});
+    // LED 高饱和
+    const mLEDcyan=new THREE.MeshBasicMaterial({color:0x00e5ff});
+    const mLEDgreen=new THREE.MeshBasicMaterial({color:0x30f090});
+    const mLEDred=new THREE.MeshBasicMaterial({color:0xff3b5c});
+    // 芯片：深紫黑 + 金边
+    const mChip=new THREE.MeshStandardMaterial({color:0x3a2a4a,metalness:0.6,roughness:0.4});
+    // 红色传感器帽
+    const mRedCap=new THREE.MeshStandardMaterial({color:0xff5050,metalness:0.3,roughness:0.45});
+
+    /* 组件1：上壳体+显示屏 */
+    const g1=new THREE.Group();
+    // 主体（铝合金，圆角圆柱）
+    const topShell=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.0,1.1,48),mAluminum);
+    topShell.castShadow=true; g1.add(topShell);
+    // 顶部装饰圈
+    const topRing=new THREE.Mesh(new THREE.TorusGeometry(2.1,0.06,12,48),mPolished);
+    topRing.position.y=0.55; topRing.rotation.x=Math.PI/2; g1.add(topRing);
+    // 底部装饰圈
+    const botRing=new THREE.Mesh(new THREE.TorusGeometry(2.0,0.06,12,48),mPolished);
+    botRing.position.y=-0.55; botRing.rotation.x=Math.PI/2; g1.add(botRing);
+    // 显示屏（黑色背景）
+    const screenBg=new THREE.Mesh(new THREE.BoxGeometry(2.7,0.95,0.06),mScreenBg);
+    screenBg.position.set(0,0.15,2.04); screenBg.rotation.x=-0.12; g1.add(screenBg);
+    // 显示屏发光区
+    const screenGlow=new THREE.Mesh(new THREE.PlaneGeometry(2.5,0.78),mScreenGlow);
+    screenGlow.position.set(0,0.15,2.075); screenGlow.rotation.x=-0.12; g1.add(screenGlow);
+    // 显示屏边框
+    const sFrame=new THREE.Mesh(new THREE.BoxGeometry(2.8,1.05,0.04),mPolished);
+    sFrame.position.set(0,0.15,2.02); sFrame.rotation.x=-0.12; g1.add(sFrame);
+    // 按键（3个）
+    for(let i=-1;i<=1;i++){
+      const btn=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.12,20),mPolished);
+      btn.position.set(i*0.55,0.6,0); g1.add(btn);
+      const btnCap=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.04,16),[mLEDcyan,mLEDgreen,mLEDred][i+1]);
+      btnCap.position.set(i*0.55,0.67,0); g1.add(btnCap);
+    }
+    // 天线
+    const ant=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,1.5,12),mPolished);
+    ant.position.set(1.75,0.85,0); ant.rotation.z=-0.3; g1.add(ant);
+    const antBall=new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16),mLEDcyan);
+    antBall.position.set(2.0,1.55,0.45); g1.add(antBall);
+    parts.push({group:g1,basePos:[0,1.4,0],dir:[0,1,0],dist:2.6,labelStagger:-1.6,labelVOff:0.3,label:'上壳体·显示模组',desc:'集成LCD数显屏、按键和NB-IoT天线，实时显示累计用气量、压力、温度及告警信息，支持远程数据上报与指令接收。',
+      spec:[['显示内容','累计用量/压力/温度/告警'],['通信方式','NB-IoT / 4G 双模'],['工作电压','3.6V DC'],['防护等级','IP65']],idx:0});
+
+    /* 组件2：密封圈 */
+    const g2=new THREE.Group();
+    const seal=new THREE.Mesh(new THREE.TorusGeometry(2.05,0.14,16,48),mRubber);
+    seal.rotation.x=Math.PI/2; g2.add(seal);
+    parts.push({group:g2,basePos:[0,0.8,0],dir:[0,1,0],dist:1.5,labelStagger:1.6,labelVOff:0.1,label:'O型密封圈',desc:'采用三元乙丙橡胶（EPDM）材质，IP68级防护密封，耐燃气腐蚀、抗老化，确保表体内部元器件与外部环境完全隔离。',
+      spec:[['材质','三元乙丙橡胶 EPDM'],['防护等级','IP68'],['耐温范围','-30~80℃'],['寿命','≥15年']],idx:1});
+
+    /* 组件3：主控电路板 */
+    const g3=new THREE.Group();
+    const pcb=new THREE.Mesh(new THREE.BoxGeometry(3.8,0.14,3.8),mPCB);
+    pcb.castShadow=true; g3.add(pcb);
+    // PCB边缘装饰
+    const pcbEdge=new THREE.Mesh(new THREE.BoxGeometry(3.85,0.04,3.85),mPolished);
+    pcbEdge.position.y=-0.07; g3.add(pcbEdge);
+    // 芯片
+    [[-1.3,0.08,-0.9,0.55],[0.7,0.08,-1.3,0.5],[1.5,0.08,0.7,0.45],[-0.9,0.08,1.4,0.55]].forEach(p=>{
+      const ch=new THREE.Mesh(new THREE.BoxGeometry(p[3],0.12,p[3]),mChip);
+      ch.position.set(p[0],p[1],p[2]); ch.castShadow=true; g3.add(ch);
+      // 芯片上的标识点
+      const dot=new THREE.Mesh(new THREE.CircleGeometry(0.04,12),mLEDcyan);
+      dot.position.set(p[0]-p[3]/2+0.08,p[1]+0.061,p[2]-p[3]/2+0.08); g3.add(dot);
+    });
+    // 通信模块
+    const comm=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.22,0.55),new THREE.MeshStandardMaterial({color:0x0a2040,metalness:0.5,roughness:0.4}));
+    comm.position.set(0.6,0.12,0.6); comm.castShadow=true; g3.add(comm);
+    // 通信模块指示灯
+    for(let i=0;i<3;i++){
+      const led=new THREE.Mesh(new THREE.SphereGeometry(0.05,10,10),[mLEDcyan,mLEDgreen,mLEDred][i]);
+      led.position.set(0.35+i*0.15,0.24,0.6); g3.add(led);
+    }
+    // 电阻/电容
+    for(let i=0;i<10;i++){
+      const r=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.22,10),mCopper);
+      r.position.set((Math.random()-0.5)*3.2,0.17,(Math.random()-0.5)*3.2);
+      g3.add(r);
+    }
+    // 接插件
+    const conn=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.2,0.3),mPolished);
+    conn.position.set(-1.5,0.15,1.5); g3.add(conn);
+    parts.push({group:g3,basePos:[0,0.5,0],dir:[0,1,0],dist:3.0,labelStagger:-0.7,labelVOff:-0.2,label:'主控电路板',desc:'集成MCU主控芯片、边缘AI算法单元、NB-IoT通信模块，实现流量/压力/温度数据采集、异常工况本地判定、远程通信与阀门控制指令输出，是智能表的核心控制单元。',
+      spec:[['主控芯片','ARM Cortex-M4'],['算法','边缘AI异常判定'],['通信','NB-IoT/4G双模'],['采样周期','1秒'],['工作功耗','≤50μA']],idx:2});
+
+    /* 组件4：电池仓 */
+    const g4=new THREE.Group();
+    const batBox=new THREE.Mesh(new THREE.BoxGeometry(3.1,0.65,2.7),mBattery);
+    batBox.castShadow=true; g4.add(batBox);
+    // 电池组（4节锂亚硫酰氯电池）
+    for(let i=0;i<4;i++){
+      const cell=new THREE.Mesh(new THREE.CylinderGeometry(0.23,0.23,2.3,20),mBatteryCell);
+      cell.rotation.z=Math.PI/2; cell.position.set(-1.1+i*0.73,0,0); cell.castShadow=true; g4.add(cell);
+      // 正极
+      const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.09,14),mPolished);
+      cap.rotation.z=Math.PI/2; cap.position.set(-1.1+i*0.73+1.2,0,0); g4.add(cap);
+      // 负极
+      const neg=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.05,14),mAluminumDark);
+      neg.rotation.z=Math.PI/2; neg.position.set(-1.1+i*0.73-1.18,0,0); g4.add(neg);
+      // 标签环
+      const lbl=new THREE.Mesh(new THREE.CylinderGeometry(0.235,0.235,0.15,20),new THREE.MeshStandardMaterial({color:0xd8a868,metalness:0.4,roughness:0.5}));
+      lbl.rotation.z=Math.PI/2; lbl.position.set(-1.1+i*0.73,0,0); g4.add(lbl);
+    }
+    parts.push({group:g4,basePos:[0,-0.2,0],dir:[0,1,0],dist:4.4,labelStagger:0.7,labelVOff:-0.4,label:'锂亚电池仓',desc:'配备ER34615型锂亚硫酰氯电池组（4节并联），标称电压3.6V，容量大、自放电率低，使用寿命≥10年，免维护设计，保障智能表长期稳定运行。',
+      spec:[['电池型号','ER34615 锂亚硫酰氯'],['标称电压','3.6V'],['容量','19Ah'],['寿命','≥10年'],['工作温度','-55~85℃']],idx:3});
+
+    /* 组件5：阀门控制电机+球阀 */
+    const g5=new THREE.Group();
+    // 电机本体（抛光金属）
+    const motorBody=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.75,1.05,28),mPolished);
+    motorBody.rotation.z=Math.PI/2; motorBody.castShadow=true; g5.add(motorBody);
+    // 电机端盖
+    const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.78,0.78,0.12,28),mAluminumDark);
+    cap.rotation.z=Math.PI/2; cap.position.set(-0.55,0,0); g5.add(cap);
+    // 电机轴（黄铜）
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,1.5,18),mBrass);
+    shaft.rotation.z=Math.PI/2; g5.add(shaft);
+    // 球阀本体（黄铜球体）
+    const ball=new THREE.Mesh(new THREE.SphereGeometry(0.58,28,28),mBrass);
+    ball.position.set(0.95,0,0); ball.castShadow=true; g5.add(ball);
+    // 球阀通孔（贯穿）
+    const hole=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,1.16,20),new THREE.MeshBasicMaterial({color:0x000000}));
+    hole.rotation.z=Math.PI/2; hole.position.set(0.95,0,0); g5.add(hole);
+    // 球阀密封座
+    const seatL=new THREE.Mesh(new THREE.TorusGeometry(0.32,0.06,10,24),mRubber);
+    seatL.rotation.y=Math.PI/2; seatL.position.set(0.5,0,0); g5.add(seatL);
+    const seatR=new THREE.Mesh(new THREE.TorusGeometry(0.32,0.06,10,24),mRubber);
+    seatR.rotation.y=Math.PI/2; seatR.position.set(1.4,0,0); g5.add(seatR);
+    parts.push({group:g5,basePos:[1.6,0,0],dir:[1,0,0],dist:3.2,label:'电机+球阀切断装置',desc:'步进电机驱动黄铜球阀，在异常工况下可在0.5秒内完成90°旋转切断供气。支持本地自主切断与远程关断指令双控，是异常自主切断的执行单元。',
+      spec:[['驱动方式','步进电机'],['阀门类型','黄铜球阀'],['关断时间','< 0.5 秒'],['控制方式','本地+远程双控'],['扭矩','5 N·m']],idx:4});
+    motorMesh=g5; valveMesh=ball; motorShaft=shaft;
+
+    // 阀门切断警告环（红色发光，默认隐藏，切断时显示+脉冲）
+    const warnRing=new THREE.Mesh(
+      new THREE.TorusGeometry(0.9,0.08,16,48),
+      new THREE.MeshBasicMaterial({color:0xff2030,transparent:true,opacity:0.0,depthWrite:false})
+    );
+    warnRing.rotation.y=Math.PI/2;
+    warnRing.position.set(0.95,0,0);
+    g5.add(warnRing);
+    valveWarnRing=warnRing;
+
+    /* 组件6：流量计量腔（叶轮） */
+    const g6=new THREE.Group();
+    // 计量腔体（铝合金）
+    const chamber=new THREE.Mesh(new THREE.CylinderGeometry(1.45,1.45,1.9,36),mAluminumDark);
+    chamber.rotation.z=Math.PI/2; chamber.castShadow=true; g6.add(chamber);
+    // 腔体端盖
+    const endCapL=new THREE.Mesh(new THREE.CylinderGeometry(1.48,1.48,0.15,36),mPolished);
+    endCapL.rotation.z=Math.PI/2; endCapL.position.set(-0.95,0,0); g6.add(endCapL);
+    const endCapR=new THREE.Mesh(new THREE.CylinderGeometry(1.48,1.48,0.15,36),mPolished);
+    endCapR.rotation.z=Math.PI/2; endCapR.position.set(0.95,0,0); g6.add(endCapR);
+    // 叶轮组
+    const impeller=new THREE.Group();
+    // 叶轮轴
+    const impShaft=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.6,12),mPolished);
+    impShaft.rotation.z=Math.PI/2; impeller.add(impShaft);
+    // 叶片（6片，抛光金属）
+    for(let i=0;i<6;i++){
+      const blade=new THREE.Mesh(new THREE.BoxGeometry(0.05,1.0,0.45),mPolished);
+      blade.rotation.x=(i/6)*Math.PI*2; blade.rotation.y=0.45;
+      blade.castShadow=true; impeller.add(blade);
+    }
+    impeller.position.set(-0.1,0,0);
+    g6.add(impeller); impellerMesh=impeller;
+    // 进出气口（黄铜接管）
+    const inlet=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.65,0.7,24),mBrass);
+    inlet.rotation.z=Math.PI/2; inlet.position.set(-1.55,0,0); inlet.castShadow=true; g6.add(inlet);
+    const outlet=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.65,0.7,24),mBrass);
+    outlet.rotation.z=Math.PI/2; outlet.position.set(1.55,0,0); outlet.castShadow=true; g6.add(outlet);
+    parts.push({group:g6,basePos:[-1.6,0,0],dir:[-1,0,0],dist:3.2,label:'流量计量腔',desc:'采用腰轮/叶轮式机械计量结构，燃气推动叶轮旋转，通过磁电转换将转速转化为流量信号。计量精度2.5级，量程比1:150，可识别微小流量变化用于泄漏检测。',
+      spec:[['计量原理','叶轮式机械计量'],['精度等级','2.5级'],['量程比','1:150'],['流量范围','0.04~6 m³/h'],['最小流量','0.04 m³/h']],idx:5});
+
+    /* 组件7：压力+温度传感器 */
+    const g7=new THREE.Group();
+    // 压力传感器本体
+    const pSen=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.3,0.55,18),mPolished);
+    pSen.position.set(0,0.42,0); pSen.castShadow=true; g7.add(pSen);
+    // 压力传感器红色帽
+    const pCap=new THREE.Mesh(new THREE.SphereGeometry(0.13,16,16),mRedCap);
+    pCap.position.set(0,0.75,0); g7.add(pCap);
+    // 温度传感器（铜色探头）
+    const tSen=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.22,0.5,16),mCopper);
+    tSen.position.set(0.7,0.38,0); tSen.castShadow=true; g7.add(tSen);
+    // 温度探头尖端
+    const tTip=new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16),mCopper);
+    tTip.position.set(0.7,0.68,0); g7.add(tTip);
+    // 连接线
+    const wire1=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.8,8),mRubber);
+    wire1.position.set(-0.3,0.5,0.2); wire1.rotation.z=0.6; g7.add(wire1);
+    parts.push({group:g7,basePos:[0.3,0.7,1.3],dir:[0,1,1],dist:2.6,label:'压力+温度传感器',desc:'集成压电式压力传感器和PT1000铂电阻温度传感器，实时采集管道内燃气压力和温度数据，为工况判定和流量补偿提供数据支撑，支持欠压、超压异常即时识别。',
+      spec:[['压力量程','0~10 kPa'],['压力精度','±0.5%FS'],['温度范围','-20~70℃'],['温度精度','±0.3℃'],['采样周期','1秒']],idx:6});
+
+    /* 组件8：下壳体（主体） */
+    const g8=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(2.05,2.25,1.65,48),mAluminum);
+    body.castShadow=true; body.receiveShadow=true; g8.add(body);
+    // 壳体装饰环
+    const bRing=new THREE.Mesh(new THREE.TorusGeometry(2.1,0.05,12,48),mPolished);
+    bRing.position.y=0.8; bRing.rotation.x=Math.PI/2; g8.add(bRing);
+    const bRing2=new THREE.Mesh(new THREE.TorusGeometry(2.2,0.05,12,48),mPolished);
+    bRing2.position.y=-0.8; bRing2.rotation.x=Math.PI/2; g8.add(bRing2);
+    // 进出气主管道（黄铜）
+    const pipeL=new THREE.Mesh(new THREE.CylinderGeometry(0.58,0.58,1.5,24),mBrass);
+    pipeL.rotation.z=Math.PI/2; pipeL.position.set(-2.5,0,0); pipeL.castShadow=true; g8.add(pipeL);
+    const pipeR=new THREE.Mesh(new THREE.CylinderGeometry(0.58,0.58,1.5,24),mBrass);
+    pipeR.rotation.z=Math.PI/2; pipeR.position.set(2.5,0,0); pipeR.castShadow=true; g8.add(pipeR);
+    // 接头螺母
+    [-2.5,2.5].forEach(x=>{
+      const nut=new THREE.Mesh(new THREE.CylinderGeometry(0.8,0.8,0.35,24),mPolished);
+      nut.rotation.z=Math.PI/2; nut.position.set(x+(x<0?-0.9:0.9),0,0); nut.castShadow=true; g8.add(nut);
+      // 螺纹
+      const thread=new THREE.Mesh(new THREE.TorusGeometry(0.78,0.03,8,24),mAluminumDark);
+      thread.rotation.y=Math.PI/2; thread.position.set(x+(x<0?-1.05:1.05),0,0); g8.add(thread);
+    });
+    parts.push({group:g8,basePos:[0,-0.2,0],dir:[0,-1,0],dist:2.0,label:'下壳体·主管道',desc:'采用铝合金压铸一体成型壳体，集成进出气主管道和承压结构，两侧黄铜接管与外部燃气管网连接，内部承载计量腔、阀门、电池等核心部件。',
+      spec:[['壳体材质','铝合金压铸'],['承压等级','0.4 MPa'],['连接方式','G2螺纹连接'],['防护等级','IP54'],['重量','约 2.8 kg']],idx:7});
+
+    // 进气/出气管道标记点（用于标注）
+    inletMarker=new THREE.Object3D(); inletMarker.position.set(-2.5,0,0); g8.add(inletMarker);
+    outletMarker=new THREE.Object3D(); outletMarker.position.set(2.5,0,0); g8.add(outletMarker);
+
+    parts.forEach(p=>{p.group.position.set(...p.basePos);root.add(p.group);});
+    buildGasStreams(root);
+  }
+
+  /* 燃气流（气态缥缈：雾化粒子云 + 流向箭头 + 计量腔涡旋） */
+  function buildGasStreams(root){
+    gasStreams=[];
+    gasArrows=[];
+    const segments=[
+      {name:'入口管',   start:[-3.0,0,0], end:[-1.6,0,0], radius:0.30},
+      {name:'计量腔',   start:[-1.6,0,0], end:[0.95,0,0], radius:0.24},
+      {name:'出口管',   start:[1.4,0,0],  end:[3.0,0,0],  radius:0.30},
+    ];
+
+    segments.forEach((seg,segIdx)=>{
+      const len=Math.hypot(seg.end[0]-seg.start[0],seg.end[1]-seg.start[1],seg.end[2]-seg.start[2]);
+
+      // 1. 气态雾化带：多层超薄透明圆柱 + 低透明度，营造缥缈气态
+      for(let layer=0;layer<3;layer++){
+        const r=seg.radius*(0.5+layer*0.22);
+        const tubeGeo=new THREE.CylinderGeometry(r,r,len,16,4,true);
+        const tubeMat=new THREE.MeshBasicMaterial({
+          color:0x40c8f0,transparent:true,opacity:0.08-layer*0.02,
+          side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending
+        });
+        const tube=new THREE.Mesh(tubeGeo,tubeMat);
+        tube.rotation.z=Math.PI/2;
+        tube.position.set((seg.start[0]+seg.end[0])/2,(seg.start[1]+seg.end[1])/2,(seg.start[2]+seg.end[2])/2);
+        root.add(tube);
+        gasStreams.push(tube);
+        tube.userData={isTube:true,segIdx,seg,layer};
+      }
+
+      // 2. 流动粒子（小而密，呈雾状流动）
+      const count=120;
+      const geo=new THREE.BufferGeometry();
+      const pos=new Float32Array(count*3);
+      const col=new Float32Array(count*3);
+      const speedArr=new Float32Array(count);
+      for(let i=0;i<count;i++){
+        const t=Math.random();
+        pos[i*3]=lerp(seg.start[0],seg.end[0],t);
+        pos[i*3+1]=seg.start[1]+(Math.random()-0.5)*seg.radius*1.2;
+        pos[i*3+2]=seg.start[2]+(Math.random()-0.5)*seg.radius*1.2;
+        // 颜色从青蓝到白，模拟天然气气雾
+        const c=Math.random();
+        col[i*3]=0.3+c*0.3; col[i*3+1]=0.7+c*0.3; col[i*3+2]=0.9+c*0.1;
+        speedArr[i]=0.02+Math.random()*0.04;
+      }
+      geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+      geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+      geo.setAttribute('aSpeed',new THREE.BufferAttribute(speedArr,1));
+      const mat=new THREE.PointsMaterial({
+        size:0.10,vertexColors:true,transparent:true,opacity:0.55,
+        blending:THREE.AdditiveBlending,depthWrite:false,sizeAttenuation:true
+      });
+      const pts=new THREE.Points(geo,mat);
+      pts.userData={isPts:true,segIdx,seg};
+      root.add(pts);
+      gasStreams.push(pts);
+
+      // 3. 流向箭头（每段2-3个，沿管道向右移动，略高于管道中心以便可见）
+      const arrowCount=seg.radius>0.28?3:2;
+      for(let a=0;a<arrowCount;a++){
+        const arrowGeo=new THREE.ConeGeometry(0.18,0.45,4);
+        const arrowMat=new THREE.MeshBasicMaterial({color:0xffcc33,transparent:true,opacity:0.9});
+        const arrow=new THREE.Mesh(arrowGeo,arrowMat);
+        arrow.rotation.z=-Math.PI/2; // 箭头朝右
+        arrow.position.y=seg.radius*0.6; // 略高于管道中心
+        arrow.userData={isArrow:true,segIdx,seg,phase:a/arrowCount,yOffset:seg.radius*0.6};
+        gasArrows.push(arrow);
+        gasStreams.push(arrow);
+        root.add(arrow);
+      }
+    });
+
+    // 4. 计量腔内涡旋（叶轮附近）
+    const vortexGeo=new THREE.BufferGeometry();
+    const vCount=90;
+    const vPos=new Float32Array(vCount*3);
+    const vCol=new Float32Array(vCount*3);
+    for(let i=0;i<vCount;i++){
+      const a=Math.random()*Math.PI*2;
+      const r=0.15+Math.random()*0.55;
+      vPos[i*3]=-0.1+Math.cos(a)*r*0.3;
+      vPos[i*3+1]=Math.sin(a)*r*0.4;
+      vPos[i*3+2]=(Math.random()-0.5)*0.4;
+      vCol[i*3]=0.3; vCol[i*3+1]=0.85; vCol[i*3+2]=1.0;
+    }
+    vortexGeo.setAttribute('position',new THREE.BufferAttribute(vPos,3));
+    vortexGeo.setAttribute('color',new THREE.BufferAttribute(vCol,3));
+    const vMat=new THREE.PointsMaterial({
+      size:0.12,vertexColors:true,transparent:true,opacity:0.6,
+      blending:THREE.AdditiveBlending,depthWrite:false
+    });
+    const vortex=new THREE.Points(vortexGeo,vMat);
+    vortex.userData={isVortex:true};
+    root.add(vortex);
+    gasStreams.push(vortex);
+  }
+
+  /* ---------- 标签（始终显示，可点击） ---------- */
+  function buildLabels(){
+    const c=$('#labels');
+    parts.forEach(p=>{
+      // 指引线
+      const line=document.createElement('div');
+      line.className='lbl-line';
+      c.appendChild(line);
+      p.lineEl=line;
+      // 标签
+      const el=document.createElement('div');
+      el.className='lbl';
+      el.innerHTML=`<span class="n">${String(p.idx+1).padStart(2,'0')}</span>${p.label}<span class="arr">▶</span>`;
+      el.onclick=()=>showPartCard(p);
+      c.appendChild(el);
+      p.labelEl=el;
+    });
+    // 进气/出气管道标签
+    [{el:()=>inletLabel,text:'进气管道',color:'#3aa0ff'},
+     {el:()=>outletLabel,text:'出气管道',color:'#3aa0ff'}].forEach(item=>{
+      const line=document.createElement('div');
+      line.className='lbl-line';
+      c.appendChild(line);
+      const el=document.createElement('div');
+      el.className='lbl pipe-lbl';
+      el.innerHTML=`<span class="n" style="color:${item.color}">➤</span>${item.text}`;
+      c.appendChild(el);
+      if(item.text==='进气管道'){inletLabel=el;inletLabel.lineEl=line;}
+      else{outletLabel=el;outletLabel.lineEl=line;}
+    });
+  }
+
+  function updateLabels(){
+    const w=renderer.domElement.clientWidth;
+    const h=renderer.domElement.clientHeight;
+    // 合拢状态下不显示标签和指引线
+    const showAll = explodeT > 0.05;
+    parts.forEach((p,i)=>{
+      if(!showAll){
+        p.labelEl.style.display='none';
+        p.lineEl.style.display='none';
+        return;
+      }
+      const wp=new THREE.Vector3();
+      p.group.getWorldPosition(wp);
+      wp.project(camera);
+      if(wp.z<1){
+        const px=(wp.x*0.5+0.5)*w;     // 部件屏幕坐标
+        const py=(-wp.y*0.5+0.5)*h;
+        // 根据部件爆炸方向偏移标签，避免重叠
+        const offset=70+explodeT*50;
+        let dxDir=p.dir[0], dyDir=p.dir[1];
+        // 带 labelStagger 的部件：斜向扇形展开，减少垂直方向溢出
+        if(p.labelStagger){
+          dxDir=p.labelStagger;
+          dyDir=p.dir[1]*0.5 + (p.labelVOff||0); // 垂直分量 + 差异化偏移
+        }
+        const ox=dxDir*offset;
+        const oy=dyDir*offset*(-1); // 屏幕y翻转
+        const lx=px+ox;
+        const ly=py+oy;
+        p.labelEl.style.left=lx+'px';
+        p.labelEl.style.top=ly+'px';
+        p.labelEl.style.display='block';
+        p.labelEl.classList.toggle('active', i===activePart);
+        // 指引线：从部件中心连到标签
+        const line=p.lineEl;
+        const dx=lx-px, dy=ly-py;
+        const len=Math.hypot(dx,dy);
+        const ang=Math.atan2(dy,dx)*180/Math.PI;
+        line.style.left=px+'px';
+        line.style.top=py+'px';
+        line.style.width=len+'px';
+        line.style.transform=`rotate(${ang}deg)`;
+        line.style.display='block';
+      } else {
+        p.labelEl.style.display='none';
+        p.lineEl.style.display='none';
+      }
+    });
+
+    // 进气/出气管道标签（始终显示）
+    const pipeOffset=60;
+    [[inletMarker,inletLabel,-1],[outletMarker,outletLabel,1]].forEach(([marker,labelEl,side])=>{
+      if(!marker||!labelEl) return;
+      const wp=new THREE.Vector3();
+      marker.getWorldPosition(wp);
+      wp.project(camera);
+      if(wp.z<1){
+        const px=(wp.x*0.5+0.5)*w;
+        const py=(-wp.y*0.5+0.5)*h;
+        const lx=px+side*pipeOffset;
+        const ly=py+40; // 标签在管道下方
+        labelEl.style.left=lx+'px';
+        labelEl.style.top=ly+'px';
+        labelEl.style.display='block';
+        const line=labelEl.lineEl;
+        const dx=lx-px, dy=ly-py;
+        const len=Math.hypot(dx,dy);
+        const ang=Math.atan2(dy,dx)*180/Math.PI;
+        line.style.left=px+'px';
+        line.style.top=py+'px';
+        line.style.width=len+'px';
+        line.style.transform=`rotate(${ang}deg)`;
+        line.style.display='block';
+      } else {
+        labelEl.style.display='none';
+        labelEl.lineEl.style.display='none';
+      }
+    });
+  }
+
+  /* 部件详情卡片 */
+  function highlightPart(idx){
+    parts.forEach((p,i)=>{
+      const isActive=i===idx;
+      p.group.traverse(obj=>{
+        if(obj.isMesh && obj.material){
+          const mats=Array.isArray(obj.material)?obj.material:[obj.material];
+          mats.forEach(m=>{
+            if(m.isMeshStandardMaterial || m.isMeshPhysicalMaterial){
+              if(isActive){
+                m.emissive.setHex(0xd07030);
+                m.emissiveIntensity=0.5;
+              } else {
+                m.emissive.setHex(0x000000);
+                m.emissiveIntensity=1;
+              }
+            }
+          });
+        }
+      });
+    });
+  }
+  function showPartCard(p){
+    activePart = p.idx;
+    highlightPart(p.idx);
+    $('#pcTitle').textContent=p.label;
+    $('#pcNum').textContent='部件编号 · PART-'+String(p.idx+1).padStart(2,'0');
+    $('#pcDesc').textContent=p.desc;
+    const specEl=$('#pcSpec');
+    specEl.innerHTML='';
+    p.spec.forEach(s=>{
+      const div=document.createElement('div');
+      div.className='pi';
+      div.innerHTML=`<div class="k">${s[0]}</div><div class="v">${s[1]}</div>`;
+      specEl.appendChild(div);
+    });
+    $('#partCard').classList.add('show');
+  }
+  function closePartCard(){
+    $('#partCard').classList.remove('show');
+    activePart=-1;
+    // 恢复所有部件高亮
+    parts.forEach(p=>{
+      p.group.traverse(obj=>{
+        if(obj.isMesh && obj.material){
+          const mats=Array.isArray(obj.material)?obj.material:[obj.material];
+          mats.forEach(m=>{
+            if(m.isMeshStandardMaterial || m.isMeshPhysicalMaterial){
+              m.emissive.setHex(0x000000);
+              m.emissiveIntensity=1;
+            }
+          });
+        }
+      });
+    });
+  }
+  $('#pcClose').onclick=closePartCard;
+  // 点击空白处关闭卡片
+  $('#view3d').addEventListener('click',(e)=>{
+    if(e.target.id==='threeCanvas' || e.target.id==='view3d'){
+      closePartCard();
+    }
+  });
+
+  /* ---------- 渲染循环 ---------- */
+  function animate(){
+    requestAnimationFrame(animate);
+    // 自动检测并修正 renderer 尺寸
+    if(camera&&renderer){
+      const wrap=$('#view3d');
+      const w=wrap.clientWidth, h=wrap.clientHeight;
+      const canvas=renderer.domElement;
+      if(Math.abs(canvas.width-w)>2||Math.abs(canvas.height-h)>2){
+        if(w>10&&h>10){
+          camera.aspect=w/h; camera.updateProjectionMatrix();
+          renderer.setSize(w,h,true);
+        }
+      }
+    }
+    const dt=0.016;
+    explodeT=lerp(explodeT,targetExplode,0.2);
+    parts.forEach(p=>{
+      const d=explodeT*p.dist;
+      p.group.position.set(p.basePos[0]+p.dir[0]*d,p.basePos[1]+p.dir[1]*d,p.basePos[2]+p.dir[2]*d);
+    });
+    // 叶轮旋转（切断后停止）
+    if(impellerMesh) impellerMesh.rotation.x+=(cutMode?0:0.12);
+    // 阀门球阀旋转（切断时旋转90°）+ 球阀发光
+    if(valveMesh){
+      const targetRot=cutMode?Math.PI/2:0;
+      valveMesh.rotation.y=lerp(valveMesh.rotation.y,targetRot,0.15);
+      if(valveMesh.material && valveMesh.material.emissive){
+        if(cutMode){
+          valveMesh.material.emissive.setHex(0xff2030);
+          valveMesh.material.emissiveIntensity=0.6+Math.sin(Date.now()*0.008)*0.2;
+        } else {
+          valveMesh.material.emissive.setHex(0x000000);
+          valveMesh.material.emissiveIntensity=1;
+        }
+      }
+    }
+    // 电机轴旋转（切断时快速转动展示驱动动作）
+    if(motorShaft){
+      motorShaft.rotation.x += cutMode?0.3:0.02;
+    }
+    // 阀门切断警告环（脉冲动画）
+    if(valveWarnRing){
+      if(cutMode){
+        valveWarnRing.material.opacity=0.7+Math.sin(Date.now()*0.01)*0.3;
+        valveWarnRing.rotation.z+=0.06;
+        valveWarnRing.scale.setScalar(1+Math.sin(Date.now()*0.008)*0.15);
+      } else {
+        valveWarnRing.material.opacity=lerp(valveWarnRing.material.opacity,0,0.15);
+        valveWarnRing.scale.setScalar(1);
+      }
+    }
+    // 燃气流动画（切断时粒子消失 + 箭头停止，正常时雾化流动 + 箭头前进）
+    gasStreams.forEach(gs=>{
+      const ud=gs.userData;
+      if(ud.isTube){
+        // 气态雾化带（MeshBasicMaterial，无 emissive）
+        const baseOpacity=0.08-ud.layer*0.02;
+        if(cutMode){
+          gs.material.color.setHex(0x5a2020);
+          gs.material.opacity=baseOpacity*0.2;
+        } else {
+          gs.material.color.setHex(0x40c8f0);
+          gs.material.opacity=baseOpacity+Math.sin(Date.now()*0.003+ud.segIdx)*0.01;
+        }
+      } else if(ud.isPts){
+        // 流动粒子
+        const seg=ud.seg;
+        const pos=gs.geometry.attributes.position;
+        const col=gs.geometry.attributes.color;
+        const spd=gs.geometry.attributes.aSpeed;
+        if(cutMode){
+          gs.material.opacity=0.0;
+        } else {
+          gs.material.opacity=0.55+Math.sin(Date.now()*0.004)*0.1;
+          for(let i=0;i<pos.count;i++){
+            let x=pos.getX(i);
+            x+=spd?spd.getX(i):0.03;
+            if(x>seg.end[0]){
+              x=seg.start[0]+(Math.random()-0.5)*0.15;
+              pos.setY(i, seg.start[1]+(Math.random()-0.5)*seg.radius*1.2);
+              pos.setZ(i, seg.start[2]+(Math.random()-0.5)*seg.radius*1.2);
+            }
+            pos.setX(i,x);
+          }
+          pos.needsUpdate=true;
+        }
+      } else if(ud.isArrow){
+        // 流向箭头
+        const seg=ud.seg;
+        if(cutMode){
+          gs.material.opacity=0;
+        } else {
+          gs.material.opacity=0.9;
+          const len=seg.end[0]-seg.start[0];
+          let t=(Date.now()*0.0008+ud.phase)%1;
+          gs.position.x=seg.start[0]+t*len;
+          gs.position.y=ud.yOffset||0;
+          gs.position.z=0;
+          // 箭头微脉动
+          const s=0.85+Math.sin(Date.now()*0.01+ud.phase*6)*0.15;
+          gs.scale.set(s,s,s);
+        }
+      } else if(ud.isVortex){
+        // 计量腔涡旋
+        if(cutMode){
+          gs.material.opacity=0.0;
+        } else {
+          gs.material.opacity=0.6;
+          gs.rotation.y+=0.04;
+          gs.rotation.x+=0.015;
+        }
+      }
+    });
+
+    if(autoPlaying){
+      autoTimer+=dt;
+      const step=Math.floor(autoTimer/0.3)%11;
+      if(step!==autoStep){
+        autoStep=step; targetExplode=step/10;
+        $('#explodeSlider').value=targetExplode*100;
+        $('#explodeVal').textContent=Math.round(targetExplode*100)+'%';
+      }
+    }
+    controls.update(autoRotateSpeed);
+    renderer.render(scene,camera);
+    updateLabels();
+  }
+
+  function onResize3D(){
+    if(!camera||!renderer) return;
+    const wrap=$('#view3d');
+    const w=wrap.clientWidth, h=wrap.clientHeight;
+    if(w>10&&h>10){
+      camera.aspect=w/h; camera.updateProjectionMatrix();
+      renderer.setSize(w,h,true);
+    }
+  }
+
+  /* ---------- UI 绑定 ---------- */
+  $('#btnExplode').onclick=()=>{targetExplode=1;syncSlider();};
+  $('#btnAssemble').onclick=()=>{targetExplode=0;syncSlider();stopAuto();};
+  $('#btnAuto').onclick=()=>{autoPlaying=!autoPlaying;autoTimer=0;autoStep=-1;$('#btnAuto').style.color=autoPlaying?'#d07030':'';};
+  $('#btnReset').onclick=()=>{controls.reset();};
+  $('#btnCut').onclick=()=>{
+    cutMode=!cutMode;
+    showToast(cutMode?'⚠ 检测到异常工况 · 阀门自主切断中':'✓ 异常解除 · 阀门恢复供气',!cutMode);
+    if(cutMode){
+      // 同时激活欠压+流量超限+阀门切断
+      activeAbnormal={lowpressure:true,overlimit:true,valve:true};
+      $('#abPanel').classList.add('show');
+      updateAbPanel('overlimit');
+      document.querySelectorAll('.ab-btn').forEach(b=>{
+        b.classList.toggle('active',b.dataset.ab==='overlimit');
+      });
+    } else {
+      activeAbnormal={lowpressure:false,overpressure:false,overlimit:false,leak:false,valve:false};
+      $('#abPanel').classList.remove('show');
+      document.querySelectorAll('.ab-btn').forEach(b=>b.classList.remove('active'));
+    }
+  };
+  $('#explodeSlider').oninput=e=>{targetExplode=e.target.value/100;stopAuto();syncSlider();};
+  $('#rotSlider').oninput=e=>{autoRotateSpeed=parseFloat(e.target.value)/100;$('#rotVal').textContent=e.target.value==0?'停止':(e.target.value>0?'正向 '+e.target.value:'反向 '+e.target.value);};
+  $('#backToMap').onclick=()=>switchView('map');
+  function syncSlider(){$('#explodeSlider').value=targetExplode*100;$('#explodeVal').textContent=Math.round(targetExplode*100)+'%';}
+  function stopAuto(){autoPlaying=false;$('#btnAuto').style.color='';}
+
+  /* 视图切换 */
+  function switchView(v){
+    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.view===v));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    $('#view'+(v==='map'?'Map':'3d')).classList.add('active');
+    if(v==='3d'){
+      // 多次尝试 resize，确保 view3d 有正确尺寸
+      [30,120,300,600].forEach(t=>setTimeout(onResize3D,t));
+    }
+    if(v==='map') resizeMap();
+  }
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchView(t.dataset.view));
+
+  /* Toast */
+  let toastTimer;
+  function showToast(msg,ok){
+    const t=$('#toast');
+    t.textContent=msg; t.classList.toggle('ok',!!ok);
+    t.classList.add('show'); clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
+  }
+
+  /* =========================================================
+     三、异常工况筛选按钮 + 原理解析面板
+     ========================================================= */
+  let activeAbnormal={lowpressure:false,overpressure:false,overlimit:false,leak:false,valve:false};
+
+  const abData={
+    lowpressure:{
+      title:'欠压工况',
+      body:'燃气压力低于<b>0.8 kPa</b>阈值时触发欠压告警。常见原因为上游气源压力不足、调压站故障、管道堵塞或冬季用气高峰供不应求。欠压工况可能导致燃具回火、熄火，存在燃气泄漏与一氧化碳中毒风险。',
+      flow:[
+        '压力传感器实时采集管道压力，1秒周期上报',
+        'MCU判定压力<0.8 kPa持续3秒，触发欠压告警',
+        '边缘AI识别为欠压异常，下发关阀指令',
+        '步进电机驱动球阀90°旋转，<0.5秒切断供气',
+        '同步上报欠压告警至云平台，推送运维工单'
+      ]
+    },
+    overpressure:{
+      title:'超压工况',
+      body:'燃气压力超过<b>10 kPa</b>安全阈值时触发超压告警。常见原因为调压器失灵、上游压力突增、管道温度升高导致气体膨胀。超压工况可能引发燃具脱火、管道破裂、甚至爆燃事故，危害性极大。',
+      flow:[
+        '压力传感器监测到压力>10 kPa，立即告警',
+        'MCU本地判定为超压紧急工况（0.1秒响应）',
+        '主控板输出紧急关阀信号，球阀快速切断',
+        '同步触发声光告警，上报云平台',
+        '联动调压站远程排查，派发抢修工单'
+      ]
+    },
+    overlimit:{
+      title:'连续流量超限',
+      body:'燃气流量持续超过<b>6 m³/h</b>（最大量程）达30秒时触发流量超限告警。常见原因为用户端管道破裂、私接私改、盗气或大流量异常用气。该工况可能导致计量失准、管道超负荷运行。',
+      flow:[
+        '叶轮计量腔持续采集流量数据',
+        'MCU统计30秒滑动窗口平均流量',
+        '判定Q>6 m³/h持续超限，触发告警',
+        '边缘AI区分正常大流量与异常超限（结合用气历史）',
+        '自主关阀切断，上报超限告警与流量曲线'
+      ]
+    },
+    leak:{
+      title:'微小泄漏识别',
+      body:'夜间（0:00-5:00）基线流量偏移超过<b>±2%</b>时触发微小泄漏识别。智能表通过分析夜间最小流量基线，结合温度压力补偿，可识别低至0.04 m³/h的微小泄漏，早于用户察觉，预防隐患扩大。',
+      flow:[
+        '夜间时段自动进入基线分析模式',
+        '叶轮计量腔采集最小流量数据（精度0.04 m³/h）',
+        'MCU对比历史基线，计算偏移率',
+        '偏移>2%持续3晚，判定为疑似微小泄漏',
+        '上报泄漏告警（不自动关阀），派发检测工单'
+      ]
+    }
+  };
+
+  document.querySelectorAll('.ab-btn').forEach(btn=>{
+    btn.onclick=()=>{
+      const key=btn.dataset.ab;
+      if(key==='reset'){
+        // 恢复正常
+        cutMode=false;
+        activeAbnormal={lowpressure:false,overpressure:false,overlimit:false,leak:false,valve:false};
+        document.querySelectorAll('.ab-btn').forEach(b=>b.classList.remove('active'));
+        $('#abPanel').classList.remove('show');
+        showToast('✓ 已恢复正常供气状态',true);
+        return;
+      }
+      // 切换该异常
+      const isActive=btn.classList.contains('active');
+      document.querySelectorAll('.ab-btn').forEach(b=>b.classList.remove('active'));
+      if(isActive){
+        // 取消
+        cutMode=false;
+        activeAbnormal[key]=false;
+        activeAbnormal.valve=false;
+        $('#abPanel').classList.remove('show');
+        showToast('✓ 已恢复正常供气',true);
+      } else {
+        // 激活该异常
+        btn.classList.add('active');
+        Object.keys(activeAbnormal).forEach(k=>activeAbnormal[k]=false);
+        activeAbnormal[key]=true;
+        // 微小泄漏不切断阀门，其他都切断
+        if(key!=='leak'){
+          cutMode=true;
+          activeAbnormal.valve=true;
+        } else {
+          cutMode=false;
+          activeAbnormal.valve=false;
+        }
+        updateAbPanel(key);
+        $('#abPanel').classList.add('show');
+        showToast('⚠ 已模拟 '+abData[key].title+' · 智能表自主响应中');
+      }
+    };
+  });
+
+  function updateAbPanel(key){
+    const d=abData[key]; if(!d) return;
+    $('#abTitle').textContent=d.title;
+    $('#abBody').innerHTML=d.body;
+    const flowEl=$('#abFlow');
+    flowEl.innerHTML='<div class="ft">智能表自主响应流程</div>';
+    d.flow.forEach((s,i)=>{
+      const step=document.createElement('div');
+      step.className='step';
+      step.innerHTML=`<div class="n">${i+1}</div><div>${s}</div>`;
+      flowEl.appendChild(step);
+    });
+  }
+  $('#abClose').onclick=()=>{$('#abPanel').classList.remove('show');};
+
+  /* ---------- 启动 ---------- */
+  window.addEventListener('load',()=>{initMap();init3D();});
+})();
+</script>
+</body>
+</html>

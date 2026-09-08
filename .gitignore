@@ -1,7 +1,13 @@
-﻿
+
 *_v*.html
 *_v*.js
 *_v*.css
 edge-err.log
 screenshot-*.png
 *.zip
+node_modules/
+*.png
+*.py
+check.js
+*_backup_*.html
+package-lock.json
