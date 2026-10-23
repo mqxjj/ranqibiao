@@ -469,7 +469,8 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/three.js/0.158.0/three.min.js" data-fallback="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.158.0/three.min.js" onerror="var fb=(this.getAttribute('data-fallback')||'').split('|');var i=(this.getAttribute('data-i')||0)*1;if(i<fb.length){this.setAttribute('data-i',i+1);this.removeAttribute('data-fallback');this.removeAttribute('data-i');this.src=fb[i];}else{document.getElementById('loader').innerHTML='<div class=&quot;ring&quot; style=&quot;border-top-color:#f87171&quot;></div><div class=&quot;tx&quot; style=&quot;color:#f87171&quot;>资源加载失败，请检查网络后刷新页面</div>';}">
+</script>
 <script>
 /* =========================================================
    燃气监测感知终端（智能表）动态演示
@@ -1510,8 +1511,10 @@
   $('#abClose').onclick=()=>{$('#abPanel').classList.remove('show');};
 
   /* ---------- 启动 ---------- */
-  window.addEventListener('load',()=>{initMap();init3D();});
+  window.addEventListener('load',()=>{initMap();if(typeof THREE!=='undefined'){try{init3D();}catch(e){console.error('init3D error:',e);document.getElementById('loader').classList.add('hide');}}else{console.warn('THREE.js not loaded');document.getElementById('loader').classList.add('hide');}});
 })();
 </script>
 </body>
 </html>
+
+
